@@ -1,0 +1,48 @@
+#!/usr/bin/env -S node --conditions=source
+import { getAdapter } from '../adapters/registry.ts'
+import { writeJournal } from '../core/journal.ts'
+import { runResultExitCode } from './helpers.ts'
+
+async function main() {
+  const [provider, ...rest] = process.argv.slice(2)
+
+  if (!provider || rest.length === 0) {
+    console.error('Usage: npm run run -- <provider> "<prompt>"')
+    console.error('       npm run run -- claude "explain this repo"')
+    console.error('       npm run run -- codex "add error handling to src/index.ts"')
+    process.exit(1)
+  }
+
+  const adapter = getAdapter(provider)
+  const prompt = rest.join(' ')
+  const cwd = process.cwd()
+
+  console.error(`hammerkit: running ${provider} in ${cwd}`)
+
+  const result = await adapter.run({ prompt, cwd })
+
+  let journalPath: string | undefined
+  try {
+    journalPath = await writeJournal({
+      type: 'run',
+      request: {
+        cwd,
+        prompt,
+        provider,
+      },
+      result,
+    })
+  } catch (err) {
+    console.error(`[hammerkit] journal write failed: ${err instanceof Error ? err.message : err}`)
+  }
+
+  const suffix = journalPath ? ` → ${journalPath}` : ''
+  console.error(`hammerkit: ${result.ok ? 'ok' : 'failed'} (${result.durationMs}ms)${suffix}`)
+  console.log(result.text)
+  process.exit(runResultExitCode(result))
+}
+
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

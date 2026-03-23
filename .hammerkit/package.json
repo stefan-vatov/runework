@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Local hammerkit testing — uses file:.. to symlink to parent repo",
+  "dependencies": {
+    "hammerkit": "file:..",
+    "zx": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
+  "scripts": {
+    "review": "node scripts/review.ts",
+    "explain": "node scripts/explain.ts"
+  }
+}

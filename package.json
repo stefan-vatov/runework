@@ -1,0 +1,93 @@
+{
+  "name": "hammerkit",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "zx-powered automation toolkit for CLI coding agents (codex, claude, opencode)",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "hammerkit-run": "./dist/cli/run.js",
+    "hammerkit-compare": "./dist/cli/compare.js",
+    "hammerkit-detect": "./dist/cli/detect.js",
+    "hammerkit-init": "./dist/cli/init.js",
+    "hammerkit-pipeline": "./dist/cli/pipeline.js"
+  },
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./adapters": {
+      "source": "./src/adapters/index.ts",
+      "types": "./dist/adapters/index.d.ts",
+      "default": "./dist/adapters/index.js"
+    },
+    "./core": {
+      "source": "./src/core/index.ts",
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./workflows": {
+      "source": "./src/workflows/index.ts",
+      "types": "./dist/workflows/index.d.ts",
+      "default": "./dist/workflows/index.js"
+    },
+    "./pipelines": {
+      "source": "./src/pipelines/index.ts",
+      "types": "./dist/pipelines/index.d.ts",
+      "default": "./dist/pipelines/index.js"
+    },
+    "./zx": {
+      "source": "./src/zx.ts",
+      "types": "./dist/zx.d.ts",
+      "default": "./dist/zx.js"
+    },
+    "./ink": {
+      "source": "./src/ink.ts",
+      "types": "./dist/ink.d.ts",
+      "default": "./dist/ink.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src/adapters",
+    "src/cli",
+    "src/core",
+    "src/pipelines",
+    "src/workflows",
+    "src/index.ts",
+    "src/ink.ts",
+    "src/models.ts",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepare": "npm run build",
+    "test": "node --conditions=source --test src/hammerkit.test.ts",
+    "typecheck": "tsc --noEmit",
+    "run": "node --conditions=source src/cli/run.ts",
+    "compare": "node --conditions=source src/cli/compare.ts",
+    "detect": "node --conditions=source src/cli/detect.ts",
+    "pipeline": "node --conditions=source src/cli/pipeline.ts"
+  },
+  "dependencies": {
+    "@types/react": "^19.2.14",
+    "ink": "^6.8.0",
+    "ink-spinner": "^5.0.0",
+    "react": "^19.2.4",
+    "zx": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
