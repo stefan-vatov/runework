@@ -21,7 +21,7 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node --conditions=source --test packages/pipelines/src/**/*.test.ts",
+        "command": "node --conditions=source --test packages/pipelines/src/*.integration.test.ts",
         "cwd": "{workspaceRoot}"
       }
     }

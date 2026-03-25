@@ -20,7 +20,7 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node --conditions=source --test src/runework.test.ts src/runework.smoke.test.ts"
+        "command": "node --conditions=source --test src/*.unit.test.ts src/*.integration.test.ts src/*.publish.test.ts"
       }
     }
   }

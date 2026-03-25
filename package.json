@@ -12,11 +12,11 @@
     "access": "public"
   },
   "bin": {
-    "runework-run": "./dist/cli/run.js",
-    "runework-compare": "./dist/cli/compare.js",
-    "runework-detect": "./dist/cli/detect.js",
-    "runework-init": "./dist/cli/init.js",
-    "runework-pipeline": "./dist/cli/pipeline.js"
+    "runework-run": "bin/runework-run.js",
+    "runework-compare": "bin/runework-compare.js",
+    "runework-detect": "bin/runework-detect.js",
+    "runework-init": "bin/runework-init.js",
+    "runework-pipeline": "bin/runework-pipeline.js"
   },
   "exports": {
     ".": {
@@ -56,6 +56,7 @@
     }
   },
   "files": [
+    "bin",
     "dist",
     "src/adapters",
     "src/cli",
@@ -76,9 +77,10 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepare": "node scripts/prepare.mjs",
-    "test": "npx nx run-many -t test --all",
-    "test:source": "node --conditions=source --test src/runework.test.ts",
-    "test:smoke": "node --conditions=source --test src/runework.smoke.test.ts",
+    "test": "npm run test:unit && npm run test:integration && npm run test:publish",
+    "test:unit": "node --conditions=source --test \"packages/*/src/*.unit.test.ts\" \"src/*.unit.test.ts\"",
+    "test:integration": "node --conditions=source --test \"packages/*/src/*.integration.test.ts\" \"src/*.integration.test.ts\"",
+    "test:publish": "node --conditions=source --test \"src/*.publish.test.ts\"",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "lint:all": "npx nx run-many -t lint --all",

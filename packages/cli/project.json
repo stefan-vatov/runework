@@ -21,7 +21,7 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node --conditions=source --test packages/cli/src/**/*.test.ts",
+        "command": "node --conditions=source --test packages/cli/src/*.unit.test.ts packages/cli/src/*.integration.test.ts",
         "cwd": "{workspaceRoot}"
       }
     }
