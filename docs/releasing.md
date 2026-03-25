@@ -59,6 +59,7 @@ Default release behavior:
 
 - `feat` -> minor
 - `fix` -> patch
+- `chore` -> patch
 - other standard commit types do not create a release unless they contain a breaking change
 
 Nx is configured with `automaticFromRef: true`, so the first managed release can generate a changelog even when no previous release tag exists yet.

@@ -54,7 +54,7 @@ npm run release:dry-run
 npm run release
 ```
 
-`npm run release` now uses conventional commits for non-interactive version selection. By default, `feat` triggers a minor release and `fix` triggers a patch release. Use `npm run release:patch`, `npm run release:minor`, or `npm run release:major` when you want to force a specific bump locally. See [`docs/releasing.md`](docs/releasing.md) for the exact workflow and the later npm publishing path.
+`npm run release` now uses conventional commits for non-interactive version selection. By default, `feat` triggers a minor release, while `fix` and `chore` trigger patch releases. Use `npm run release:patch`, `npm run release:minor`, or `npm run release:major` when you want to force a specific bump locally. See [`docs/releasing.md`](docs/releasing.md) for the exact workflow and the later npm publishing path.
 
 ## Library Usage
 
