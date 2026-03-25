@@ -1,7 +1,7 @@
 {
   "name": "@runework/workflows",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "exports": {
     ".": {
@@ -10,8 +10,11 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "dependencies": {
-    "@runework/core": "file:../core"
+    "@runework/core": "0.1.1"
   }
 }

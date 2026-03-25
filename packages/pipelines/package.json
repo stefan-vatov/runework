@@ -1,7 +1,7 @@
 {
   "name": "@runework/pipelines",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "exports": {
     ".": {
@@ -10,9 +10,12 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "dependencies": {
-    "@runework/core": "file:../core",
+    "@runework/core": "0.1.1",
     "@types/react": "^19.2.14",
     "ink": "^6.8.0",
     "ink-spinner": "^5.0.0",

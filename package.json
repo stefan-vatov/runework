@@ -1,7 +1,7 @@
 {
   "name": "runework",
   "private": false,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "license": "MIT",
   "description": "zx-powered automation toolkit for CLI coding agents (codex, claude, opencode)",
@@ -97,10 +97,10 @@
     "pipeline": "node --conditions=source src/cli/pipeline.ts"
   },
   "dependencies": {
-    "@runework/cli": "file:packages/cli",
-    "@runework/core": "file:packages/core",
-    "@runework/pipelines": "file:packages/pipelines",
-    "@runework/workflows": "file:packages/workflows",
+    "@runework/cli": "0.1.1",
+    "@runework/core": "0.1.1",
+    "@runework/pipelines": "0.1.1",
+    "@runework/workflows": "0.1.1",
     "@types/react": "^19.2.14",
     "ink": "^6.8.0",
     "ink-spinner": "^5.0.0",
