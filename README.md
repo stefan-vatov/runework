@@ -45,6 +45,17 @@ npm run detect
 
 All runs are journaled into `.runework/.work/runs/`.
 
+## Releases
+
+This repo uses Nx Release for semantic versioning, changelog generation, and git tags. The public root package and the private bundled workspace packages are versioned together so the publish manifest stays npm-compatible.
+
+```bash
+npm run release:dry-run
+npm run release
+```
+
+Use `npm run release:patch`, `npm run release:minor`, or `npm run release:major` when you want an explicit bump instead of the interactive prompt. See [`docs/releasing.md`](docs/releasing.md) for the exact workflow and the later npm publishing path.
+
 ## Library Usage
 
 ```ts

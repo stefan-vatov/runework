@@ -77,6 +77,12 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepare": "node scripts/prepare.mjs",
+    "release": "npx nx release --skip-publish",
+    "release:dry-run": "npx nx release --dry-run --skip-publish",
+    "release:major": "npx nx release major --skip-publish",
+    "release:minor": "npx nx release minor --skip-publish",
+    "release:patch": "npx nx release patch --skip-publish",
+    "release:publish": "npx nx release publish",
     "test": "npm run test:unit && npm run test:integration && npm run test:publish",
     "test:unit": "node --conditions=source --test \"packages/*/src/*.unit.test.ts\" \"src/*.unit.test.ts\"",
     "test:integration": "node --conditions=source --test \"packages/*/src/*.integration.test.ts\" \"src/*.integration.test.ts\"",
@@ -91,10 +97,10 @@
     "pipeline": "node --conditions=source src/cli/pipeline.ts"
   },
   "dependencies": {
-    "@runework/core": "file:packages/core",
-    "@runework/workflows": "file:packages/workflows",
-    "@runework/pipelines": "file:packages/pipelines",
     "@runework/cli": "file:packages/cli",
+    "@runework/core": "file:packages/core",
+    "@runework/pipelines": "file:packages/pipelines",
+    "@runework/workflows": "file:packages/workflows",
     "@types/react": "^19.2.14",
     "ink": "^6.8.0",
     "ink-spinner": "^5.0.0",
@@ -108,6 +114,9 @@
     "@runework/cli"
   ],
   "devDependencies": {
+    "@nx/js": "^21.0.0",
+    "@swc-node/register": "^1.11.1",
+    "@swc/core": "^1.15.21",
     "@types/node": "^22.0.0",
     "eslint": "^9.0.0",
     "husky": "^9.0.0",
