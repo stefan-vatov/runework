@@ -53,6 +53,14 @@ Each release will:
 3. create a release commit
 4. create a git tag like `v0.2.0`
 
+`npm run release` uses conventional commits to determine the bump automatically.
+
+Default release behavior:
+
+- `feat` -> minor
+- `fix` -> patch
+- other standard commit types do not create a release unless they contain a breaking change
+
 Nx is configured with `automaticFromRef: true`, so the first managed release can generate a changelog even when no previous release tag exists yet.
 
 If you want the first managed tag to match the current on-disk version instead of bumping it, run an explicit first release:
@@ -110,3 +118,15 @@ If you want to smoke-test the publish step locally before wiring CI, do it after
 ```bash
 npm run release:publish -- --dry-run
 ```
+
+## Automation on main
+
+GitHub Actions runs `npm run release` automatically after the `CI` workflow succeeds on `main`.
+
+That automation:
+
+- creates the semver release commit and tag
+- pushes them back to `main`
+- does not publish to npm
+
+The workflow skips release commits themselves to avoid loops.
