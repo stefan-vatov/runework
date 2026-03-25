@@ -8,9 +8,9 @@ dist
 # nx
 .nx
 
-# hammerkit
-.hammerkit/node_modules
-.hammerkit/.work
+# runework
+.runework/node_modules
+.runework/.work
 
 # Created by https://www.toptal.com/developers/gitignore/api/macos,vim,emacs,visualstudiocode,node,windows,linux
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,vim,emacs,visualstudiocode,node,windows,linux

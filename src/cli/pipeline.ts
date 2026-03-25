@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { pipelineCommand } from '@hammerkit/cli'
+import { pipelineCommand } from '@runework/cli'
 
 pipelineCommand().then(
   (code) => process.exit(code),

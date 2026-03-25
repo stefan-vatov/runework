@@ -12,7 +12,7 @@ import type {
   WorkflowEvent,
 } from './types.ts'
 
-const WORKFLOW_META = Symbol.for('hammerkit.workflow.meta')
+const WORKFLOW_META = Symbol.for('runework.workflow.meta')
 
 type StoredValue =
   | { type: 'value'; value: unknown }

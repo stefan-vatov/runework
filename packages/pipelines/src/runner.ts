@@ -1,7 +1,7 @@
 import { readdir, mkdir, readFile, stat } from 'node:fs/promises'
 import { join, resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { getAdapters } from '@hammerkit/core'
+import { getAdapters } from '@runework/core'
 import { ensureGitignoreEntries } from './gitignore.ts'
 import {
   PipelineRunError,
@@ -32,12 +32,12 @@ function isRunPipelineOptions(
 }
 
 /**
- * List available pipeline names from .hammerkit/pipelines/.
+ * List available pipeline names from .runework/pipelines/.
  * Discovers both single-file pipelines (name.ts) and
  * directory pipelines (name/index.ts).
  */
-export async function listPipelines(hammerkitDir: string): Promise<string[]> {
-  const pipelinesDir = join(hammerkitDir, 'pipelines')
+export async function listPipelines(runeworkDir: string): Promise<string[]> {
+  const pipelinesDir = join(runeworkDir, 'pipelines')
   try {
     const entries = await readdir(pipelinesDir)
     const pipelines: string[] = []
@@ -67,8 +67,8 @@ export async function listPipelines(hammerkitDir: string): Promise<string[]> {
 /**
  * Run a pipeline by name.
  *
- * 1. Dynamic imports .hammerkit/pipelines/<pipelineName>.ts
- * 2. Creates output dir: .hammerkit/.work/<pipelineName>/<timestamp>/
+ * 1. Dynamic imports .runework/pipelines/<pipelineName>.ts
+ * 2. Creates output dir: .runework/.work/<pipelineName>/<timestamp>/
  * 3. Builds PipelineContext with writeOutput, readOutput, addGitignoreEntries
  * 4. Calls the pipeline function
  */
@@ -83,7 +83,7 @@ export type RunPipelineOptions = {
 
 export async function runPipeline(
   pipelineName: string,
-  hammerkitDir: string,
+  runeworkDir: string,
   runOptions: RunPipelineOptions | Record<string, unknown> = {},
 ): Promise<PipelineResult> {
   // Support both old (plain options object) and new (RunPipelineOptions) signatures
@@ -95,16 +95,16 @@ export async function runPipeline(
   const explicitRunId = isRunPipelineOptions(runOptions) ? runOptions.runId : undefined
   const resumeRunId = isRunPipelineOptions(runOptions) ? runOptions.resumeRunId : undefined
   const parentRunId = isRunPipelineOptions(runOptions) ? runOptions.parentRunId : undefined
-  const absHammerkitDir = resolve(hammerkitDir)
-  const repoRoot = dirname(absHammerkitDir)
+  const absRuneworkDir = resolve(runeworkDir)
+  const repoRoot = dirname(absRuneworkDir)
 
   // Resolve pipeline path: name.ts or name/index.ts
-  let pipelinePath = join(absHammerkitDir, 'pipelines', `${pipelineName}.ts`)
+  let pipelinePath = join(absRuneworkDir, 'pipelines', `${pipelineName}.ts`)
   try {
     const info = await stat(pipelinePath)
     if (!info.isFile()) throw new Error()
   } catch {
-    pipelinePath = join(absHammerkitDir, 'pipelines', pipelineName, 'index.ts')
+    pipelinePath = join(absRuneworkDir, 'pipelines', pipelineName, 'index.ts')
   }
 
   const pipelineUrl = pathToFileURL(pipelinePath).href
@@ -116,11 +116,11 @@ export async function runPipeline(
   }
 
   const runId = resumeRunId ?? explicitRunId ?? makePipelineRunId()
-  const outputDir = join(absHammerkitDir, '.work', pipelineName, runId)
+  const outputDir = join(absRuneworkDir, '.work', pipelineName, runId)
 
-  // Create output directory for this run under .hammerkit/.work/
+  // Create output directory for this run under .runework/.work/
   if (!resumeRunId && !explicitRunId) {
-    const outputRoot = join(absHammerkitDir, '.work', pipelineName)
+    const outputRoot = join(absRuneworkDir, '.work', pipelineName)
     await mkdir(outputRoot, { recursive: true })
   }
   if (!resumeRunId) {
@@ -141,7 +141,7 @@ export async function runPipeline(
     version: getWorkflowPipelineMeta(pipelineFn).version,
     parentRunId,
     async spawnPipeline(request) {
-      return runPipeline(request.pipelineName, absHammerkitDir, {
+      return runPipeline(request.pipelineName, absRuneworkDir, {
         options: request.options ?? {},
         runId: request.runId,
         resumeRunId: request.resumeRunId,
@@ -156,7 +156,7 @@ export async function runPipeline(
 
   // Build context
   const ctx: PipelineContext = {
-    hammerkitDir: absHammerkitDir,
+    runeworkDir: absRuneworkDir,
     repoRoot,
     runId,
     outputDir,

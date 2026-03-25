@@ -1,5 +1,5 @@
 {
-  "name": "@hammerkit/workflows",
+  "name": "@runework/workflows",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -12,6 +12,6 @@
   },
   "files": ["dist", "src"],
   "dependencies": {
-    "@hammerkit/core": "file:../core"
+    "@runework/core": "file:../core"
   }
 }

@@ -1,9 +1,9 @@
-import { detectTools } from '@hammerkit/core'
+import { detectTools } from '@runework/core'
 
 export async function detectCommand(): Promise<number> {
   const tools = await detectTools()
 
-  console.log('hammerkit: detected tools\n')
+  console.log('runework: detected tools\n')
   for (const tool of tools) {
     const status = tool.available ? '✓' : '✗'
     const version = tool.version ? ` (${tool.version})` : ''

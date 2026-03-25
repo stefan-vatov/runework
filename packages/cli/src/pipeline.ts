@@ -1,5 +1,5 @@
-import { listPipelines, runPipeline, PipelineRunError, createPipelineTui } from '@hammerkit/pipelines'
-import { resolveHammerkitDir } from './helpers.ts'
+import { listPipelines, runPipeline, PipelineRunError, createPipelineTui } from '@runework/pipelines'
+import { resolveRuneworkDir } from './helpers.ts'
 
 function parseOptions(args: string[]): {
   pipelineOptions: Record<string, unknown>
@@ -33,15 +33,15 @@ function parseOptions(args: string[]): {
 
 export async function pipelineCommand(argv: string[] = process.argv.slice(2)): Promise<number> {
   const [pipelineName, ...rest] = argv
-  const hammerkitDir = resolveHammerkitDir()
+  const runeworkDir = resolveRuneworkDir()
 
   if (!pipelineName) {
-    const available = await listPipelines(hammerkitDir)
-    console.error('Usage: hammerkit-pipeline <pipeline-name> [--resume-run <run-id>] [--key value...]')
+    const available = await listPipelines(runeworkDir)
+    console.error('Usage: runework-pipeline <pipeline-name> [--resume-run <run-id>] [--key value...]')
     if (available.length > 0) {
       console.error(`\nAvailable pipelines: ${available.join(', ')}`)
     } else {
-      console.error('\nNo pipelines found in .hammerkit/pipelines/')
+      console.error('\nNo pipelines found in .runework/pipelines/')
     }
     return 1
   }
@@ -50,7 +50,7 @@ export async function pipelineCommand(argv: string[] = process.argv.slice(2)): P
   const tui = createPipelineTui(pipelineName)
 
   try {
-    const result = await runPipeline(pipelineName, hammerkitDir, {
+    const result = await runPipeline(pipelineName, runeworkDir, {
       options: pipelineOptions,
       resumeRunId,
       log: (msg) => tui.log(msg),

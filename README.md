@@ -1,4 +1,4 @@
-# hammerkit
+# runework
 
 Thin `zx` toolkit for orchestrating `codex`, `claude`, and `opencode` while keeping repo-specific prompts, rules, and pipeline policy inside each target codebase.
 
@@ -43,12 +43,12 @@ Availability check:
 npm run detect
 ```
 
-All runs are journaled into `.hammerkit/.work/runs/`.
+All runs are journaled into `.runework/.work/runs/`.
 
 ## Library Usage
 
 ```ts
-import { compareProviders, getAdapter } from 'hammerkit'
+import { compareProviders, getAdapter } from 'runework'
 
 const codex = getAdapter('codex')
 
@@ -60,7 +60,7 @@ const result = await codex.run({
 const comparisons = await compareProviders({
   adapters: [codex],
   promptTemplate: 'Summarize {{repo}} in 3 bullets',
-  variables: { repo: 'hammerkit' },
+  variables: { repo: 'runework' },
   common: { cwd: process.cwd() },
 })
 ```

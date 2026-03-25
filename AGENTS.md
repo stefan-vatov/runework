@@ -1,4 +1,4 @@
-# hammerkit
+# runework
 
 Purpose: thin zx toolkit for orchestrating `codex`, `claude`, and `opencode`.
 

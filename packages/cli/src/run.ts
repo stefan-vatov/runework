@@ -1,4 +1,4 @@
-import { getAdapter, writeJournal } from '@hammerkit/core'
+import { getAdapter, writeJournal } from '@runework/core'
 import { runResultExitCode } from './helpers.ts'
 
 export async function runCommand(argv: string[] = process.argv.slice(2)): Promise<number> {
@@ -15,7 +15,7 @@ export async function runCommand(argv: string[] = process.argv.slice(2)): Promis
   const prompt = rest.join(' ')
   const cwd = process.cwd()
 
-  console.error(`hammerkit: running ${provider} in ${cwd}`)
+  console.error(`runework: running ${provider} in ${cwd}`)
 
   const result = await adapter.run({ prompt, cwd })
 
@@ -31,11 +31,11 @@ export async function runCommand(argv: string[] = process.argv.slice(2)): Promis
       result,
     })
   } catch (err) {
-    console.error(`[hammerkit] journal write failed: ${err instanceof Error ? err.message : err}`)
+    console.error(`[runework] journal write failed: ${err instanceof Error ? err.message : err}`)
   }
 
   const suffix = journalPath ? ` → ${journalPath}` : ''
-  console.error(`hammerkit: ${result.ok ? 'ok' : 'failed'} (${result.durationMs}ms)${suffix}`)
+  console.error(`runework: ${result.ok ? 'ok' : 'failed'} (${result.durationMs}ms)${suffix}`)
   console.log(result.text)
   return runResultExitCode(result)
 }

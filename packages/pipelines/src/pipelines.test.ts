@@ -7,24 +7,24 @@ import test from 'node:test'
 import { runPipeline } from './runner.ts'
 
 async function writePipeline(
-  hammerkitDir: string,
+  runeworkDir: string,
   name: string,
   source: string,
 ): Promise<void> {
-  await mkdir(join(hammerkitDir, 'pipelines'), { recursive: true })
-  await writeFile(join(hammerkitDir, 'pipelines', `${name}.ts`), source, 'utf8')
+  await mkdir(join(runeworkDir, 'pipelines'), { recursive: true })
+  await writeFile(join(runeworkDir, 'pipelines', `${name}.ts`), source, 'utf8')
 }
 
 test('runPipeline creates a unique output directory for each run', async (t) => {
-  const tmpRoot = await mkdtemp(join(tmpdir(), 'hammerkit-run-pipeline-'))
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-run-pipeline-'))
   t.after(async () => {
     await rm(tmpRoot, { recursive: true, force: true })
   })
 
-  const hammerkitDir = join(tmpRoot, '.hammerkit')
-  await mkdir(join(hammerkitDir, 'pipelines'), { recursive: true })
+  const runeworkDir = join(tmpRoot, '.runework')
+  await mkdir(join(runeworkDir, 'pipelines'), { recursive: true })
   await writeFile(
-    join(hammerkitDir, 'pipelines', 'hello.ts'),
+    join(runeworkDir, 'pipelines', 'hello.ts'),
     [
       'export default async function pipeline(ctx) {',
       "  const file = await ctx.writeOutput('result.txt', String(ctx.options.label ?? ''))",
@@ -35,8 +35,8 @@ test('runPipeline creates a unique output directory for each run', async (t) => 
     'utf8',
   )
 
-  const first = await runPipeline('hello', hammerkitDir, { options: { label: 'first' } })
-  const second = await runPipeline('hello', hammerkitDir, { options: { label: 'second' } })
+  const first = await runPipeline('hello', runeworkDir, { options: { label: 'first' } })
+  const second = await runPipeline('hello', runeworkDir, { options: { label: 'second' } })
 
   assert.ok(first.outputPath)
   assert.ok(second.outputPath)
@@ -46,14 +46,14 @@ test('runPipeline creates a unique output directory for each run', async (t) => 
 })
 
 test('runPipeline resumes cached step results without re-running side effects', async (t) => {
-  const tmpRoot = await mkdtemp(join(tmpdir(), 'hammerkit-resume-step-'))
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-resume-step-'))
   t.after(async () => {
     await rm(tmpRoot, { recursive: true, force: true })
   })
 
-  const hammerkitDir = join(tmpRoot, '.hammerkit')
+  const runeworkDir = join(tmpRoot, '.runework')
   await writePipeline(
-    hammerkitDir,
+    runeworkDir,
     'resume-step',
     [
       "import { readFile, writeFile } from 'node:fs/promises'",
@@ -81,13 +81,13 @@ test('runPipeline resumes cached step results without re-running side effects', 
 
   const runId = 'resume-step-run'
   await assert.rejects(
-    () => runPipeline('resume-step', hammerkitDir, { runId }),
+    () => runPipeline('resume-step', runeworkDir, { runId }),
     /fail once after step/,
   )
 
-  const resumed = await runPipeline('resume-step', hammerkitDir, { resumeRunId: runId })
+  const resumed = await runPipeline('resume-step', runeworkDir, { resumeRunId: runId })
   assert.equal(resumed.runId, runId)
-  assert.equal(resumed.outputDir, join(hammerkitDir, '.work', 'resume-step', runId))
+  assert.equal(resumed.outputDir, join(runeworkDir, '.work', 'resume-step', runId))
   assert.equal(
     await readFile(join(tmpRoot, 'counter.txt'), 'utf8'),
     '1',
@@ -95,14 +95,14 @@ test('runPipeline resumes cached step results without re-running side effects', 
 })
 
 test('runPipeline caches child pipeline results across resume', async (t) => {
-  const tmpRoot = await mkdtemp(join(tmpdir(), 'hammerkit-resume-child-'))
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-resume-child-'))
   t.after(async () => {
     await rm(tmpRoot, { recursive: true, force: true })
   })
 
-  const hammerkitDir = join(tmpRoot, '.hammerkit')
+  const runeworkDir = join(tmpRoot, '.runework')
   await writePipeline(
-    hammerkitDir,
+    runeworkDir,
     'child',
     [
       "import { readFile, writeFile } from 'node:fs/promises'",
@@ -120,7 +120,7 @@ test('runPipeline caches child pipeline results across resume', async (t) => {
     ].join('\n'),
   )
   await writePipeline(
-    hammerkitDir,
+    runeworkDir,
     'parent',
     [
       "export default async function pipeline(ctx) {",
@@ -139,27 +139,27 @@ test('runPipeline caches child pipeline results across resume', async (t) => {
 
   const runId = 'parent-run'
   await assert.rejects(
-    () => runPipeline('parent', hammerkitDir, { runId }),
+    () => runPipeline('parent', runeworkDir, { runId }),
     /fail once after child/,
   )
 
-  const resumed = await runPipeline('parent', hammerkitDir, { resumeRunId: runId })
+  const resumed = await runPipeline('parent', runeworkDir, { resumeRunId: runId })
   assert.equal(resumed.ok, true)
   assert.equal(await readFile(join(tmpRoot, 'child-count.txt'), 'utf8'), '1')
 
-  const childRuns = await readdir(join(hammerkitDir, '.work', 'child'))
+  const childRuns = await readdir(join(runeworkDir, '.work', 'child'))
   assert.equal(childRuns.length, 1)
 })
 
 test('runPipeline resumes failed child pipelines with the same child run ID', async (t) => {
-  const tmpRoot = await mkdtemp(join(tmpdir(), 'hammerkit-resume-failed-child-'))
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-resume-failed-child-'))
   t.after(async () => {
     await rm(tmpRoot, { recursive: true, force: true })
   })
 
-  const hammerkitDir = join(tmpRoot, '.hammerkit')
+  const runeworkDir = join(tmpRoot, '.runework')
   await writePipeline(
-    hammerkitDir,
+    runeworkDir,
     'child',
     [
       "import { readFile, writeFile } from 'node:fs/promises'",
@@ -185,7 +185,7 @@ test('runPipeline resumes failed child pipelines with the same child run ID', as
     ].join('\n'),
   )
   await writePipeline(
-    hammerkitDir,
+    runeworkDir,
     'parent',
     [
       "export default async function pipeline(ctx) {",
@@ -199,27 +199,27 @@ test('runPipeline resumes failed child pipelines with the same child run ID', as
 
   const runId = 'parent-run'
   await assert.rejects(
-    () => runPipeline('parent', hammerkitDir, { runId }),
+    () => runPipeline('parent', runeworkDir, { runId }),
     /child fails once/,
   )
 
-  const resumed = await runPipeline('parent', hammerkitDir, { resumeRunId: runId })
+  const resumed = await runPipeline('parent', runeworkDir, { resumeRunId: runId })
   assert.equal(resumed.ok, true)
   assert.equal(await readFile(join(tmpRoot, 'child-count.txt'), 'utf8'), '1')
 
-  const childRuns = await readdir(join(hammerkitDir, '.work', 'child'))
+  const childRuns = await readdir(join(runeworkDir, '.work', 'child'))
   assert.equal(childRuns.length, 1)
 })
 
 test('repeatUntil checkpoints loop state for resumed runs', async (t) => {
-  const tmpRoot = await mkdtemp(join(tmpdir(), 'hammerkit-repeat-until-'))
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-repeat-until-'))
   t.after(async () => {
     await rm(tmpRoot, { recursive: true, force: true })
   })
 
-  const hammerkitDir = join(tmpRoot, '.hammerkit')
+  const runeworkDir = join(tmpRoot, '.runework')
   await writePipeline(
-    hammerkitDir,
+    runeworkDir,
     'repeat-loop',
     [
       "import { appendFile } from 'node:fs/promises'",
@@ -255,18 +255,18 @@ test('repeatUntil checkpoints loop state for resumed runs', async (t) => {
 
   const runId = 'loop-run'
   await assert.rejects(
-    () => runPipeline('repeat-loop', hammerkitDir, { runId }),
+    () => runPipeline('repeat-loop', runeworkDir, { runId }),
     /fail during loop/,
   )
 
-  const resumed = await runPipeline('repeat-loop', hammerkitDir, { resumeRunId: runId })
+  const resumed = await runPipeline('repeat-loop', runeworkDir, { resumeRunId: runId })
   assert.equal(resumed.ok, true)
   assert.equal(
     await readFile(join(tmpRoot, 'loop.log'), 'utf8'),
     ['0', '1', '2', ''].join('\n'),
   )
   assert.equal(
-    await readFile(join(hammerkitDir, '.work', 'repeat-loop', runId, 'loop.json'), 'utf8'),
+    await readFile(join(runeworkDir, '.work', 'repeat-loop', runId, 'loop.json'), 'utf8'),
     JSON.stringify({ value: 3 }),
   )
 })

@@ -1,10 +1,10 @@
-import { writeJournal, renderTemplate } from '@hammerkit/core'
+import { writeJournal, renderTemplate } from '@runework/core'
 import type {
   AgentAdapter,
   AgentRunRequest,
   AgentRunResult,
-} from '@hammerkit/core'
-import { getUnsupportedRequestOptions } from '@hammerkit/core'
+} from '@runework/core'
+import { getUnsupportedRequestOptions } from '@runework/core'
 
 export type CompareRequest = {
   adapters: AgentAdapter[]
@@ -19,7 +19,7 @@ function makeFailedResult(provider: string, error: unknown): AgentRunResult {
     provider,
     ok: false,
     exitCode: null,
-    text: `[hammerkit] adapter error: ${message}`,
+    text: `[runework] adapter error: ${message}`,
     stdout: '',
     stderr: message,
     durationMs: 0,
@@ -78,7 +78,7 @@ export async function compareProviders(
       results,
     })
   } catch (err) {
-    console.error(`[hammerkit] journal write failed: ${err instanceof Error ? err.message : err}`)
+    console.error(`[runework] journal write failed: ${err instanceof Error ? err.message : err}`)
   }
 
   return results

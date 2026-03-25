@@ -1,5 +1,5 @@
 {
-  "name": "hammerkit-core",
+  "name": "runework-core",
   "root": "packages/core",
   "sourceRoot": "packages/core/src",
   "targets": {

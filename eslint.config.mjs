@@ -5,7 +5,7 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
-      '.hammerkit/.work/**',
+      '.runework/.work/**',
       'templates/**',
     ],
   },

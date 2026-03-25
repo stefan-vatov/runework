@@ -1,5 +1,5 @@
 {
-  "name": "hammerkit",
+  "name": "runework",
   "root": ".",
   "sourceRoot": "src",
   "targets": {
@@ -20,7 +20,7 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node --conditions=source --test src/hammerkit.test.ts src/hammerkit.smoke.test.ts"
+        "command": "node --conditions=source --test src/runework.test.ts src/runework.smoke.test.ts"
       }
     }
   }

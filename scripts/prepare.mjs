@@ -22,6 +22,6 @@ const isCI = process.env.CI === 'true' || process.env.CI === '1'
 if (isRepoInstall && !isCI) {
   const husky = spawnSync('npx', ['husky'], { stdio: 'inherit', shell: true })
   if (husky.status !== 0) {
-    console.error('[hammerkit] warning: Husky hook installation failed (exit %d)', husky.status)
+    console.error('[runework] warning: Husky hook installation failed (exit %d)', husky.status)
   }
 }

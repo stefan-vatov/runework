@@ -1,9 +1,9 @@
 {
   "private": true,
   "type": "module",
-  "description": "Local hammerkit testing — uses file:.. to symlink to parent repo",
+  "description": "Local runework testing — uses file:.. to symlink to parent repo",
   "dependencies": {
-    "hammerkit": "file:..",
+    "runework": "file:..",
     "zx": "^8.0.0"
   },
   "devDependencies": {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { detectCommand } from '@hammerkit/cli'
+import { detectCommand } from '@runework/cli'
 
 detectCommand().then(
   (code) => process.exit(code),

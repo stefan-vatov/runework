@@ -118,7 +118,7 @@ export function createPipelineTui(pipelineName: string) {
     const [state, setS] = useState(currentState)
     setState = setS
     return h(Box, { flexDirection: 'column' },
-      h(Text, { bold: true, color: 'blue' }, `hammerkit pipeline: ${pipelineName}`),
+      h(Text, { bold: true, color: 'blue' }, `runework pipeline: ${pipelineName}`),
       h(PipelineTui, { state }),
     )
   }

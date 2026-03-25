@@ -1,5 +1,5 @@
 {
-  "name": "@hammerkit/pipelines",
+  "name": "@runework/pipelines",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -12,7 +12,7 @@
   },
   "files": ["dist", "src"],
   "dependencies": {
-    "@hammerkit/core": "file:../core",
+    "@runework/core": "file:../core",
     "@types/react": "^19.2.14",
     "ink": "^6.8.0",
     "ink-spinner": "^5.0.0",

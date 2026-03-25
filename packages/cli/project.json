@@ -1,5 +1,5 @@
 {
-  "name": "hammerkit-cli",
+  "name": "runework-cli",
   "root": "packages/cli",
   "sourceRoot": "packages/cli/src",
   "targets": {

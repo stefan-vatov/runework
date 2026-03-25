@@ -1,14 +1,14 @@
 import { cp, mkdir, readFile, rm, writeFile, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { $ } from 'zx'
-import { renderTemplate } from '@hammerkit/core'
-import { ensureGitignoreEntries } from '@hammerkit/pipelines'
-import { defaultHammerkitDependency } from './helpers.ts'
+import { renderTemplate } from '@runework/core'
+import { ensureGitignoreEntries } from '@runework/pipelines'
+import { defaultRuneworkDependency } from './helpers.ts'
 
 export type InitDeps = {
   packageRoot: string
   packageVersion: string
-  templatesHammerkitDir: string
+  templatesRuneworkDir: string
   templatesRepoLocalDir: string
   currentDir: string
 }
@@ -18,7 +18,7 @@ function parseArgs(argv: string[]) {
   let noInstall = false
   let noAiConfig = false
   let force = false
-  let hammerkitUrl: string | undefined
+  let runeworkUrl: string | undefined
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -28,14 +28,14 @@ function parseArgs(argv: string[]) {
       noAiConfig = true
     } else if (arg === '--force') {
       force = true
-    } else if (arg === '--hammerkit-url' && argv[i + 1]) {
-      hammerkitUrl = argv[++i]
+    } else if (arg === '--runework-url' && argv[i + 1]) {
+      runeworkUrl = argv[++i]
     } else if (!arg.startsWith('-')) {
       targetDir = arg
     }
   }
 
-  return { targetDir: resolve(targetDir), noInstall, noAiConfig, force, hammerkitUrl }
+  return { targetDir: resolve(targetDir), noInstall, noAiConfig, force, runeworkUrl }
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -55,43 +55,43 @@ async function copyIfMissing(src: string, dest: string, recursive = false) {
 
 export async function initCommand(argv: string[], deps: InitDeps): Promise<number> {
   const flags = parseArgs(argv)
-  const hammerkitDir = join(flags.targetDir, '.hammerkit')
-  const hammerkitUrl = flags.hammerkitUrl ?? defaultHammerkitDependency(
+  const runeworkDir = join(flags.targetDir, '.runework')
+  const runeworkUrl = flags.runeworkUrl ?? defaultRuneworkDependency(
     deps.packageVersion,
     deps.packageRoot,
     deps.currentDir,
   )
 
-  if (await exists(hammerkitDir)) {
+  if (await exists(runeworkDir)) {
     if (!flags.force) {
-      console.error('hammerkit: .hammerkit/ already exists. Use --force or delete it first.')
+      console.error('runework: .runework/ already exists. Use --force or delete it first.')
       return 1
     }
 
-    await rm(hammerkitDir, { recursive: true, force: true })
+    await rm(runeworkDir, { recursive: true, force: true })
   }
 
-  console.error(`hammerkit: initializing .hammerkit/ in ${flags.targetDir}`)
+  console.error(`runework: initializing .runework/ in ${flags.targetDir}`)
 
   // 1. Create directory structure
-  await mkdir(join(hammerkitDir, 'scripts'), { recursive: true })
-  await mkdir(join(hammerkitDir, 'prompts'), { recursive: true })
+  await mkdir(join(runeworkDir, 'scripts'), { recursive: true })
+  await mkdir(join(runeworkDir, 'prompts'), { recursive: true })
 
   // 2. Write package.json from template
-  const pkgTemplate = await readFile(join(deps.templatesHammerkitDir, 'package.json.tmpl'), 'utf8')
-  const pkgContent = renderTemplate(pkgTemplate, { hammerkitUrl })
-  await writeFile(join(hammerkitDir, 'package.json'), pkgContent, 'utf8')
+  const pkgTemplate = await readFile(join(deps.templatesRuneworkDir, 'package.json.tmpl'), 'utf8')
+  const pkgContent = renderTemplate(pkgTemplate, { runeworkUrl })
+  await writeFile(join(runeworkDir, 'package.json'), pkgContent, 'utf8')
 
   // 3. Copy tsconfig.json
-  await cp(join(deps.templatesHammerkitDir, 'tsconfig.json'), join(hammerkitDir, 'tsconfig.json'))
+  await cp(join(deps.templatesRuneworkDir, 'tsconfig.json'), join(runeworkDir, 'tsconfig.json'))
 
   // 4. Copy example scripts
-  await cp(join(deps.templatesHammerkitDir, 'scripts'), join(hammerkitDir, 'scripts'), { recursive: true })
+  await cp(join(deps.templatesRuneworkDir, 'scripts'), join(runeworkDir, 'scripts'), { recursive: true })
   // Make scripts executable
-  await $({ quiet: true, nothrow: true })`chmod +x ${join(hammerkitDir, 'scripts')}/*.ts`
+  await $({ quiet: true, nothrow: true })`chmod +x ${join(runeworkDir, 'scripts')}/*.ts`
 
   // 5. Copy prompt templates
-  await cp(join(deps.templatesHammerkitDir, 'prompts'), join(hammerkitDir, 'prompts'), { recursive: true })
+  await cp(join(deps.templatesRuneworkDir, 'prompts'), join(runeworkDir, 'prompts'), { recursive: true })
 
   // 6. Copy AI tool configs to repo root (unless --no-ai-config)
   if (!flags.noAiConfig) {
@@ -105,30 +105,30 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
   }
 
   // 7. Copy example pipelines
-  const pipelinesSrc = join(deps.templatesHammerkitDir, 'pipelines')
+  const pipelinesSrc = join(deps.templatesRuneworkDir, 'pipelines')
   if (await exists(pipelinesSrc)) {
-    await mkdir(join(hammerkitDir, 'pipelines'), { recursive: true })
-    await cp(pipelinesSrc, join(hammerkitDir, 'pipelines'), { recursive: true })
+    await mkdir(join(runeworkDir, 'pipelines'), { recursive: true })
+    await cp(pipelinesSrc, join(runeworkDir, 'pipelines'), { recursive: true })
   }
 
   // 8. Update .gitignore
   await ensureGitignoreEntries(flags.targetDir, [
-    '.hammerkit/node_modules',
-    '.hammerkit/.work',
+    '.runework/node_modules',
+    '.runework/.work',
   ])
 
   // 9. Install dependencies
   if (!flags.noInstall) {
-    console.error('hammerkit: installing dependencies...')
-    await $({ cwd: hammerkitDir, quiet: false })`npm install`
+    console.error('runework: installing dependencies...')
+    await $({ cwd: runeworkDir, quiet: false })`npm install`
   }
 
   // 10. Summary
   console.error('')
-  console.error('hammerkit: initialized .hammerkit/ directory')
+  console.error('runework: initialized .runework/ directory')
   console.error('')
-  console.error('  .hammerkit/')
-  console.error('    package.json        deps (hammerkit + zx)')
+  console.error('  .runework/')
+  console.error('    package.json        deps (runework + zx)')
   console.error('    tsconfig.json       IDE support')
   console.error('    scripts/            standalone scripts')
   console.error('    pipelines/          modular AI workflows')
@@ -136,8 +136,8 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
   console.error('    .work/              all output (gitignored)')
   console.error('')
   console.error('Run scripts (requires Node 24+):')
-  console.error('  cd .hammerkit && npm run review')
-  console.error('  cd .hammerkit && npm run explain -- src/main.rs')
+  console.error('  cd .runework && npm run review')
+  console.error('  cd .runework && npm run explain -- src/main.rs')
 
   return 0
 }

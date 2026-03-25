@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { AgentAdapter } from '@hammerkit/core'
+import type { AgentAdapter } from '@runework/core'
 import { compareProviders } from './compare.ts'
 
 test('compareProviders rejects provider-specific common options', async () => {

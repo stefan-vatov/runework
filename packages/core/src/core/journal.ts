@@ -9,12 +9,12 @@ export type JournalEntry = {
 
 /**
  * Writes a JSON journal entry to <root>/<date>/<timestamp>-<uuid>.json.
- * Default root is .hammerkit/.work/runs when called from .hammerkit scripts.
+ * Default root is .runework/.work/runs when called from .runework scripts.
  * Returns the path to the written file.
  */
 export async function writeJournal(
   entry: JournalEntry,
-  root = '.hammerkit/.work/runs',
+  root = '.runework/.work/runs',
 ): Promise<string> {
   const now = new Date()
   const day = now.toISOString().slice(0, 10)

@@ -1,4 +1,4 @@
-import type { AgentAdapter } from '@hammerkit/core'
+import type { AgentAdapter } from '@runework/core'
 
 export type PipelineProgressEvent =
   | { type: 'start-parallel'; names: string[] }
@@ -42,9 +42,9 @@ export type RepeatUntilOptions<State> = {
 }
 
 export type PipelineContext = {
-  /** Resolved absolute path to the .hammerkit/ directory */
-  hammerkitDir: string
-  /** Resolved absolute path to the repo root (parent of .hammerkit/) */
+  /** Resolved absolute path to the .runework/ directory */
+  runeworkDir: string
+  /** Resolved absolute path to the repo root (parent of .runework/) */
   repoRoot: string
   /** Stable ID for this pipeline run. */
   runId: string

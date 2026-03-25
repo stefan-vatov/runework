@@ -5,8 +5,8 @@ export { pipelineCommand } from './pipeline.ts'
 export { initCommand } from './init.ts'
 export type { InitDeps } from './init.ts'
 export {
-  resolveHammerkitDir,
+  resolveRuneworkDir,
   runResultExitCode,
   compareResultsExitCode,
-  defaultHammerkitDependency,
+  defaultRuneworkDependency,
 } from './helpers.ts'

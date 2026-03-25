@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import test from 'node:test'
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const initBinName = process.platform === 'win32' ? 'hammerkit-init.cmd' : 'hammerkit-init'
+const initBinName = process.platform === 'win32' ? 'runework-init.cmd' : 'runework-init'
 
 function runCommand(
   command: string,
@@ -32,7 +32,7 @@ function assertSucceeded(
 
 test('packed artifact installs and runs generated scripts', async (t) => {
   const repoRoot = resolve('.')
-  const tmpRoot = await mkdtemp(join(tmpdir(), 'hammerkit-pack-smoke-'))
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-pack-smoke-'))
   t.after(async () => {
     await rm(tmpRoot, { recursive: true, force: true })
   })
@@ -85,15 +85,15 @@ test('packed artifact installs and runs generated scripts', async (t) => {
       [targetDir, '--no-install', '--no-ai-config'],
       consumerDir,
     ),
-    'installed hammerkit-init failed',
+    'installed runework-init failed',
   )
 
   const generatedPkg = JSON.parse(
-    await readFile(join(targetDir, '.hammerkit', 'package.json'), 'utf8'),
+    await readFile(join(targetDir, '.runework', 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string> }
-  assert.equal(generatedPkg.dependencies?.hammerkit, `^${manifest.version}`)
+  assert.equal(generatedPkg.dependencies?.runework, `^${manifest.version}`)
 
-  const hammerkitDir = join(targetDir, '.hammerkit')
+  const runeworkDir = join(targetDir, '.runework')
   const pipelineImport = runCommand(
     process.execPath,
     [
@@ -101,7 +101,7 @@ test('packed artifact installs and runs generated scripts', async (t) => {
       '-e',
       "const mod = await import('./pipelines/code-review.ts'); if (typeof mod.default !== 'function') throw new Error('generated pipeline did not export a runnable default')",
     ],
-    hammerkitDir,
+    runeworkDir,
   )
   assertSucceeded(
     pipelineImport,

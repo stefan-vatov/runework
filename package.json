@@ -1,5 +1,5 @@
 {
-  "name": "hammerkit",
+  "name": "runework",
   "private": false,
   "version": "0.1.0",
   "type": "module",
@@ -12,11 +12,11 @@
     "access": "public"
   },
   "bin": {
-    "hammerkit-run": "./dist/cli/run.js",
-    "hammerkit-compare": "./dist/cli/compare.js",
-    "hammerkit-detect": "./dist/cli/detect.js",
-    "hammerkit-init": "./dist/cli/init.js",
-    "hammerkit-pipeline": "./dist/cli/pipeline.js"
+    "runework-run": "./dist/cli/run.js",
+    "runework-compare": "./dist/cli/compare.js",
+    "runework-detect": "./dist/cli/detect.js",
+    "runework-init": "./dist/cli/init.js",
+    "runework-pipeline": "./dist/cli/pipeline.js"
   },
   "exports": {
     ".": {
@@ -77,8 +77,8 @@
     "build": "node scripts/build.mjs",
     "prepare": "node scripts/prepare.mjs",
     "test": "npx nx run-many -t test --all",
-    "test:source": "node --conditions=source --test src/hammerkit.test.ts",
-    "test:smoke": "node --conditions=source --test src/hammerkit.smoke.test.ts",
+    "test:source": "node --conditions=source --test src/runework.test.ts",
+    "test:smoke": "node --conditions=source --test src/runework.smoke.test.ts",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "lint:all": "npx nx run-many -t lint --all",
@@ -89,10 +89,10 @@
     "pipeline": "node --conditions=source src/cli/pipeline.ts"
   },
   "dependencies": {
-    "@hammerkit/core": "file:packages/core",
-    "@hammerkit/workflows": "file:packages/workflows",
-    "@hammerkit/pipelines": "file:packages/pipelines",
-    "@hammerkit/cli": "file:packages/cli",
+    "@runework/core": "file:packages/core",
+    "@runework/workflows": "file:packages/workflows",
+    "@runework/pipelines": "file:packages/pipelines",
+    "@runework/cli": "file:packages/cli",
     "@types/react": "^19.2.14",
     "ink": "^6.8.0",
     "ink-spinner": "^5.0.0",
@@ -100,10 +100,10 @@
     "zx": "^8.0.0"
   },
   "bundleDependencies": [
-    "@hammerkit/core",
-    "@hammerkit/workflows",
-    "@hammerkit/pipelines",
-    "@hammerkit/cli"
+    "@runework/core",
+    "@runework/workflows",
+    "@runework/pipelines",
+    "@runework/cli"
   ],
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -12,7 +12,7 @@ export function warnUnsupported(
   for (const field of unsupported) {
     const value = req[field]
     if (value !== undefined && value !== null) {
-      console.error(`[hammerkit] ${adapter}: "${field}" is not supported by this adapter and will be ignored`)
+      console.error(`[runework] ${adapter}: "${field}" is not supported by this adapter and will be ignored`)
     }
   }
 }

@@ -1,17 +1,17 @@
 # Architecture
 
-hammerkit is a thin zx-powered TypeScript toolkit for automating AI CLI tools (codex, claude, opencode). It provides shared primitives — adapters, execution, templating, journaling — that you use from `.hammerkit/` directories in your code repos.
+runework is a thin zx-powered TypeScript toolkit for automating AI CLI tools (codex, claude, opencode). It provides shared primitives — adapters, execution, templating, journaling — that you use from `.runework/` directories in your code repos.
 
 ## Repo structure
 
 ```
-hammerkit/
+runework/
   scripts/
     build.mjs          # clean dist/, run tsc, chmod CLI entrypoints
   src/
     core/               # shared primitives
       run-cli.ts        # single place for all CLI execution (zx $)
-      journal.ts        # write run logs to .hammerkit/.work/runs/
+      journal.ts        # write run logs to .runework/.work/runs/
       json.ts           # safeJsonParse, parseJsonLines, toText
       render-template.ts# {{var}} substitution in prompt files
       detect.ts         # check which AI CLIs are installed
@@ -27,12 +27,12 @@ hammerkit/
     pipelines/
       runtime.ts        # durable pipeline runtime: steps, checkpoints, child pipelines, loops
     cli/
-      run.ts            # hammerkit-run: single provider run
-      compare.ts        # hammerkit-compare: multi-provider comparison
-      detect.ts         # hammerkit-detect: show installed tools
-      init.ts           # hammerkit-init: scaffold .hammerkit/ in a target repo
+      run.ts            # runework-run: single provider run
+      compare.ts        # runework-compare: multi-provider comparison
+      detect.ts         # runework-detect: show installed tools
+      init.ts           # runework-init: scaffold .runework/ in a target repo
   templates/
-    hammerkit/          # scaffolding for .hammerkit/ directories
+    runework/          # scaffolding for .runework/ directories
       package.json.tmpl
       tsconfig.json
       scripts/          # example scripts
@@ -42,8 +42,8 @@ hammerkit/
       .codex/config.toml
       .claude/skills/
       opencode.jsonc
-  .hammerkit/           # local testing — dogfoods the library
-    package.json        # "hammerkit": "file:.." (symlink to parent)
+  .runework/           # local testing — dogfoods the library
+    package.json        # "runework": "file:.." (symlink to parent)
     tsconfig.json
     scripts/
     prompts/
@@ -51,7 +51,7 @@ hammerkit/
 
 ## TypeScript execution model
 
-hammerkit runs TypeScript natively on Node 24 with zero build step for development. The key mechanism is **conditional exports**.
+runework runs TypeScript natively on Node 24 with zero build step for development. The key mechanism is **conditional exports**.
 
 ### How it works
 
@@ -75,7 +75,7 @@ The `package.json` exports map has three conditions per entry:
 
 **For development:** `node --conditions=source src/cli/detect.ts` runs entirely from TypeScript source. No build needed.
 
-**For installed consumers:** plain `node` resolves `dist/*.js`. Their `.hammerkit` scripts should run with plain `node`, not `--conditions=source`.
+**For installed consumers:** plain `node` resolves `dist/*.js`. Their `.runework` scripts should run with plain `node`, not `--conditions=source`.
 
 ### Import extensions
 
@@ -96,13 +96,13 @@ Both paths resolve correctly — `.ts` in source for Node 24 type stripping, `.j
 
 ### IDE support
 
-The `.hammerkit/tsconfig.json` (and `templates/hammerkit/tsconfig.json`) includes:
+The `.runework/tsconfig.json` (and `templates/runework/tsconfig.json`) includes:
 
 ```json
 "customConditions": ["source"]
 ```
 
-This tells the TypeScript language server to resolve `import from 'hammerkit'` using the `"source"` condition, so go-to-definition lands in `src/*.ts` instead of `dist/*.d.ts`.
+This tells the TypeScript language server to resolve `import from 'runework'` using the `"source"` condition, so go-to-definition lands in `src/*.ts` instead of `dist/*.d.ts`.
 
 ## Adapter design
 
@@ -130,19 +130,19 @@ Every adapter calls `runCli()` for shell execution. This is the single place whe
 
 ## Pipeline runtime
 
-Pipelines are the main repo-local workflow abstraction. The runtime now lives in `src/pipelines/runtime.ts` and is exposed through `hammerkit/pipelines`.
+Pipelines are the main repo-local workflow abstraction. The runtime now lives in `src/pipelines/runtime.ts` and is exposed through `runework/pipelines`.
 
 The core split is:
 
-- hammerkit owns generic mechanics: run IDs, persisted step results, checkpoints, child-pipeline invocation, and loop helpers.
+- runework owns generic mechanics: run IDs, persisted step results, checkpoints, child-pipeline invocation, and loop helpers.
 - local pipelines own policy: prompts, stopping conditions, branch logic, and repo-specific actions.
 
-`PipelineContext` includes durable helpers such as `step()`, `checkpoint()`, `getCheckpoint()`, `spawn()`, and `repeatUntil()`. `runPipeline()` persists run state under `.hammerkit/.work/<pipeline>/<run-id>/`, and `hammerkit-pipeline --resume-run <run-id>` resumes the same pipeline run from that saved state.
+`PipelineContext` includes durable helpers such as `step()`, `checkpoint()`, `getCheckpoint()`, `spawn()`, and `repeatUntil()`. `runPipeline()` persists run state under `.runework/.work/<pipeline>/<run-id>/`, and `runework-pipeline --resume-run <run-id>` resumes the same pipeline run from that saved state.
 
 `defineWorkflowPipeline()` is the ergonomic wrapper for versioned durable pipelines:
 
 ```ts
-import { defineWorkflowPipeline } from 'hammerkit/pipelines'
+import { defineWorkflowPipeline } from 'runework/pipelines'
 
 export default defineWorkflowPipeline({
   version: 1,
@@ -159,7 +159,7 @@ export default defineWorkflowPipeline({
 })
 ```
 
-## Running the hammerkit repo
+## Running the runework repo
 
 ```bash
 # Typecheck
@@ -179,13 +179,13 @@ npm test
 
 The source-running dev scripts use `node --conditions=source`. Build and prepare use plain `node`.
 
-## The .hammerkit/ testing directory
+## The .runework/ testing directory
 
-The `.hammerkit/` directory at the repo root is for dogfooding. Its `package.json` has `"hammerkit": "file:.."` which creates a symlink at `.hammerkit/node_modules/hammerkit` → `../..` (the hammerkit repo root). Consumer scripts still run with plain `node`; local source resolution is only for hammerkit’s own development workflows.
+The `.runework/` directory at the repo root is for dogfooding. Its `package.json` has `"runework": "file:.."` which creates a symlink at `.runework/node_modules/runework` → `../..` (the runework repo root). Consumer scripts still run with plain `node`; local source resolution is only for runework’s own development workflows.
 
 ```bash
-cd .hammerkit
-npm run review          # runs scripts/review.ts against hammerkit's own source
+cd .runework
+npm run review          # runs scripts/review.ts against runework's own source
 npm run explain -- src/core/run-cli.ts
 ```
 

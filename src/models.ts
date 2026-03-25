@@ -1,1 +1,1 @@
-export { codex, claude, opencode } from '@hammerkit/core'
+export { codex, claude, opencode } from '@runework/core'

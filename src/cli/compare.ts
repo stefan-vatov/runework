@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { compareCommand } from '@hammerkit/cli'
+import { compareCommand } from '@runework/cli'
 
 compareCommand().then(
   (code) => process.exit(code),

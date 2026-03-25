@@ -20,6 +20,6 @@ export async function ensureGitignoreEntries(
   const missing = entries.filter((entry) => !content.includes(entry))
   if (missing.length === 0) return
 
-  const block = '\n# hammerkit\n' + missing.join('\n') + '\n'
+  const block = '\n# runework\n' + missing.join('\n') + '\n'
   await appendFile(gitignorePath, block, 'utf8')
 }

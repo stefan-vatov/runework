@@ -1,11 +1,11 @@
 import { basename, dirname, resolve } from 'node:path'
 
-import type { AgentRunResult } from '@hammerkit/core'
+import type { AgentRunResult } from '@runework/core'
 
-export function resolveHammerkitDir(cwd = process.cwd()): string {
-  return basename(cwd) === '.hammerkit'
+export function resolveRuneworkDir(cwd = process.cwd()): string {
+  return basename(cwd) === '.runework'
     ? cwd
-    : resolve(cwd, '.hammerkit')
+    : resolve(cwd, '.runework')
 }
 
 export function runResultExitCode(result: Pick<AgentRunResult, 'ok' | 'exitCode'>): number {
@@ -20,12 +20,12 @@ export function compareResultsExitCode(
   return results.every((result) => result.ok) ? 0 : 1
 }
 
-export function defaultHammerkitDependency(
+export function defaultRuneworkDependency(
   packageVersion: string,
-  hammerkitRoot: string,
+  runeworkRoot: string,
   currentDir: string,
 ): string {
   return basename(dirname(currentDir)) === 'src'
-    ? `file:${hammerkitRoot}`
+    ? `file:${runeworkRoot}`
     : `^${packageVersion}`
 }

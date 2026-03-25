@@ -1,1 +1,1 @@
-export * from '@hammerkit/core/ink'
+export * from '@runework/core/ink'

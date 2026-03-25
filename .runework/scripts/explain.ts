@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { getAdapter, renderTemplate } from 'hammerkit'
+import { getAdapter, renderTemplate } from 'runework'
 import { readFile } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,11 +10,11 @@ if (!file) {
   process.exit(1)
 }
 
-const hammerkitDir = dirname(dirname(fileURLToPath(import.meta.url)))
-const repoRoot = dirname(hammerkitDir)
+const runeworkDir = dirname(dirname(fileURLToPath(import.meta.url)))
+const repoRoot = dirname(runeworkDir)
 
 const promptTemplate = await readFile(
-  join(hammerkitDir, 'prompts', 'explain-file.md'),
+  join(runeworkDir, 'prompts', 'explain-file.md'),
   'utf8',
 )
 const prompt = renderTemplate(promptTemplate, { path: file })

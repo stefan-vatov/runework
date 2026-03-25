@@ -1,5 +1,5 @@
 {
-  "name": "@hammerkit/cli",
+  "name": "@runework/cli",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -12,9 +12,9 @@
   },
   "files": ["dist", "src"],
   "dependencies": {
-    "@hammerkit/core": "file:../core",
-    "@hammerkit/workflows": "file:../workflows",
-    "@hammerkit/pipelines": "file:../pipelines",
+    "@runework/core": "file:../core",
+    "@runework/workflows": "file:../workflows",
+    "@runework/pipelines": "file:../pipelines",
     "zx": "^8.0.0"
   }
 }

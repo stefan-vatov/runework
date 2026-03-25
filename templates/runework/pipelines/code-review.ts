@@ -1,6 +1,6 @@
-import { codex, claude, detectTools, opencode } from 'hammerkit'
-import { defineWorkflowPipeline } from 'hammerkit/pipelines'
-import { $ } from 'hammerkit/zx'
+import { codex, claude, detectTools, opencode } from 'runework'
+import { defineWorkflowPipeline } from 'runework/pipelines'
+import { $ } from 'runework/zx'
 
 const REVIEW_PROMPT = `You are a senior code reviewer. Review the following diff for:
 - Correctness: logic errors, off-by-ones, null handling

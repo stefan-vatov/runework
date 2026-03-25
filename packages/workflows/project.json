@@ -1,5 +1,5 @@
 {
-  "name": "hammerkit-workflows",
+  "name": "runework-workflows",
   "root": "packages/workflows",
   "sourceRoot": "packages/workflows/src",
   "targets": {

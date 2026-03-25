@@ -3,8 +3,8 @@
  * without declaring their own deps.
  *
  * Usage in pipelines:
- *   import { render, Text, Box, useApp } from 'hammerkit/ink'
- *   import { Spinner } from 'hammerkit/ink'
+ *   import { render, Text, Box, useApp } from 'runework/ink'
+ *   import { Spinner } from 'runework/ink'
  */
 export {
   render,

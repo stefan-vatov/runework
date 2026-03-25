@@ -1,5 +1,5 @@
 {
-  "name": "hammerkit-pipelines",
+  "name": "runework-pipelines",
   "root": "packages/pipelines",
   "sourceRoot": "packages/pipelines/src",
   "targets": {

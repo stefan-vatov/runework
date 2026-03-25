@@ -1,5 +1,5 @@
-import { getAdapters } from '@hammerkit/core'
-import { compareProviders } from '@hammerkit/workflows'
+import { getAdapters } from '@runework/core'
+import { compareProviders } from '@runework/workflows'
 import { compareResultsExitCode } from './helpers.ts'
 
 export async function compareCommand(argv: string[] = process.argv.slice(2)): Promise<number> {
@@ -14,7 +14,7 @@ export async function compareCommand(argv: string[] = process.argv.slice(2)): Pr
   const cwd = process.cwd()
   const adapters = getAdapters()
 
-  console.error(`hammerkit: comparing ${adapters.map((a) => a.name).join(', ')} in ${cwd}`)
+  console.error(`runework: comparing ${adapters.map((a) => a.name).join(', ')} in ${cwd}`)
 
   const results = await compareProviders({
     adapters,

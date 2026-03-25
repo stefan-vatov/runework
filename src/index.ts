@@ -1,4 +1,4 @@
 // Compatibility facade — re-exports from internal packages
-export * from '@hammerkit/core'
-export * from '@hammerkit/pipelines'
-export * from '@hammerkit/workflows'
+export * from '@runework/core'
+export * from '@runework/pipelines'
+export * from '@runework/workflows'

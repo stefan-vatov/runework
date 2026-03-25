@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runCommand } from '@hammerkit/cli'
+import { runCommand } from '@runework/cli'
 
 runCommand().then(
   (code) => process.exit(code),

@@ -1,7 +1,7 @@
-// Re-export helpers from @hammerkit/cli for backward compatibility
+// Re-export helpers from @runework/cli for backward compatibility
 export {
-  resolveHammerkitDir,
+  resolveRuneworkDir,
   runResultExitCode,
   compareResultsExitCode,
-  defaultHammerkitDependency,
-} from '@hammerkit/cli'
+  defaultRuneworkDependency,
+} from '@runework/cli'

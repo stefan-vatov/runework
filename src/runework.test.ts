@@ -41,16 +41,16 @@ test('subpath exports resolve correctly', async () => {
   assert.equal(typeof ink.render, 'function')
 })
 
-test('CLI helpers re-export from @hammerkit/cli', async () => {
+test('CLI helpers re-export from @runework/cli', async () => {
   const helpers = await import('./cli/helpers.ts')
-  assert.equal(typeof helpers.resolveHammerkitDir, 'function')
+  assert.equal(typeof helpers.resolveRuneworkDir, 'function')
   assert.equal(typeof helpers.runResultExitCode, 'function')
   assert.equal(typeof helpers.compareResultsExitCode, 'function')
-  assert.equal(typeof helpers.defaultHammerkitDependency, 'function')
+  assert.equal(typeof helpers.defaultRuneworkDependency, 'function')
 })
 
-test('hammerkit-init supports --force and scaffolds install-safe scripts plus pipeline-only tsconfig', async (t) => {
-  const tmpRoot = await mkdtemp(join(tmpdir(), 'hammerkit-init-'))
+test('runework-init supports --force and scaffolds install-safe scripts plus pipeline-only tsconfig', async (t) => {
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-init-'))
   t.after(async () => {
     await rm(tmpRoot, { recursive: true, force: true })
   })
@@ -74,21 +74,21 @@ test('hammerkit-init supports --force and scaffolds install-safe scripts plus pi
   assert.equal(first.status, 0, first.stderr)
 
   const generatedPkg = JSON.parse(
-    await readFile(join(targetDir, '.hammerkit', 'package.json'), 'utf8'),
+    await readFile(join(targetDir, '.runework', 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string>; scripts?: Record<string, string> }
-  assert.equal(generatedPkg.dependencies?.hammerkit, `file:${process.cwd()}`)
+  assert.equal(generatedPkg.dependencies?.runework, `file:${process.cwd()}`)
   assert.equal(generatedPkg.scripts?.review, 'node scripts/review.ts')
   assert.equal(generatedPkg.scripts?.explain, 'node scripts/explain.ts')
 
   const generatedTsconfig = JSON.parse(
-    await readFile(join(targetDir, '.hammerkit', 'tsconfig.json'), 'utf8'),
+    await readFile(join(targetDir, '.runework', 'tsconfig.json'), 'utf8'),
   ) as { include?: string[] }
   assert.deepEqual(generatedTsconfig.include, [
     'scripts/**/*.ts',
     'pipelines/**/*.ts',
   ])
 
-  await writeFile(join(targetDir, '.hammerkit', 'marker.txt'), 'stale', 'utf8')
+  await writeFile(join(targetDir, '.runework', 'marker.txt'), 'stale', 'utf8')
 
   const second = spawnSync(process.execPath, baseArgs, {
     cwd: process.cwd(),
@@ -102,16 +102,16 @@ test('hammerkit-init supports --force and scaffolds install-safe scripts plus pi
     encoding: 'utf8',
   })
   assert.equal(forced.status, 0, forced.stderr)
-  await assert.rejects(() => readFile(join(targetDir, '.hammerkit', 'marker.txt'), 'utf8'))
+  await assert.rejects(() => readFile(join(targetDir, '.runework', 'marker.txt'), 'utf8'))
 })
 
 test('runPipeline rejects invalid review scopes instead of reporting a clean diff', async () => {
   const { runPipeline } = await import('./pipelines/index.ts')
   await assert.rejects(
     () =>
-      runPipeline('code-review', resolve('.hammerkit'), {
-        options: { scope: '__hammerkit_missing_review_scope__' },
+      runPipeline('code-review', resolve('.runework'), {
+        options: { scope: '__runework_missing_review_scope__' },
       }),
-    /Invalid review scope "__hammerkit_missing_review_scope__"/,
+    /Invalid review scope "__runework_missing_review_scope__"/,
   )
 })
