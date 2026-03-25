@@ -1,0 +1,20 @@
+{
+  "name": "@runework/cli",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "dependencies": {
+    "@runework/core": "file:../core",
+    "@runework/workflows": "file:../workflows",
+    "@runework/pipelines": "file:../pipelines",
+    "zx": "^8.0.0"
+  }
+}

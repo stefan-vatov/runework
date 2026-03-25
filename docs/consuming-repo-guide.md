@@ -1,6 +1,6 @@
-# Using hammerkit in your project
+# Using runework in your project
 
-hammerkit lets you write AI automation scripts in any repo — Elixir, Rust, Go, Python, whatever. Scripts live in a `.hammerkit/` directory that's a self-contained Node package. Your project root stays clean.
+runework lets you write AI automation scripts in any repo — Elixir, Rust, Go, Python, whatever. Scripts live in a `.runework/` directory that's a self-contained Node package. Your project root stays clean.
 
 ## Prerequisites
 
@@ -9,17 +9,17 @@ hammerkit lets you write AI automation scripts in any repo — Elixir, Rust, Go,
 
 ## Setup
 
-From a local checkout of hammerkit, run this in your project root:
+From a local checkout of runework, run this in your project root:
 
 ```bash
-node --conditions=source /path/to/hammerkit/src/cli/init.ts
+node --conditions=source /path/to/runework/src/cli/init.ts
 ```
 
 This creates:
 
 ```
-.hammerkit/
-  package.json        hammerkit + zx dependencies
+.runework/
+  package.json        runework + zx dependencies
   tsconfig.json       IDE support (autocomplete, type checking)
   node_modules/       gitignored
   .work/              pipeline + journal output (gitignored)
@@ -38,31 +38,31 @@ It also copies AI tool configs to your repo root (AGENTS.md, .codex/, .claude/, 
 ### Flags
 
 ```bash
-hammerkit-init [target-dir]     # defaults to current directory
+runework-init [target-dir]     # defaults to current directory
   --no-install              # skip npm install
   --no-ai-config            # skip copying AI tool configs to repo root
-  --hammerkit-url <url>     # override hammerkit dependency
+  --runework-url <url>     # override runework dependency
 ```
 
 ## Writing scripts
 
-Scripts are TypeScript files in `.hammerkit/scripts/`. They import from `hammerkit` and `zx`. Node 24 runs `.ts` files natively — no compilation, no tsx.
+Scripts are TypeScript files in `.runework/scripts/`. They import from `runework` and `zx`. Node 24 runs `.ts` files natively — no compilation, no tsx.
 
 ```ts
 #!/usr/bin/env node
-import { getAdapter, renderTemplate, writeJournal } from 'hammerkit'
+import { getAdapter, renderTemplate, writeJournal } from 'runework'
 import { $ } from 'zx'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // Resolve paths relative to the script
-const hammerkitDir = dirname(dirname(fileURLToPath(import.meta.url)))
-const repoRoot = dirname(hammerkitDir)
+const runeworkDir = dirname(dirname(fileURLToPath(import.meta.url)))
+const repoRoot = dirname(runeworkDir)
 
 // Use zx for shell commands
 const branch = (await $({ quiet: true })`git rev-parse --abbrev-ref HEAD`).stdout.trim()
 
-// Use hammerkit adapters to call AI tools
+// Use runework adapters to call AI tools
 const claude = getAdapter('claude')
 const result = await claude.run({
   prompt: `Summarize what happened on branch ${branch}`,
@@ -72,7 +72,7 @@ const result = await claude.run({
 // Journal the result
 await writeJournal(
   { type: 'summary', provider: 'claude', branch, ok: result.ok },
-  join(hammerkitDir, '.work', 'runs'),
+  join(runeworkDir, '.work', 'runs'),
 )
 
 console.log(result.text)
@@ -80,18 +80,18 @@ console.log(result.text)
 
 ### Runtime note
 
-Consumer `.hammerkit` scripts should run with plain `node`. `--conditions=source` is for hammerkit development itself, not for installed consumer dependencies inside `node_modules`.
+Consumer `.runework` scripts should run with plain `node`. `--conditions=source` is for runework development itself, not for installed consumer dependencies inside `node_modules`.
 
 ### Key imports
 
 ```ts
 // Everything from one import
-import { getAdapter, getAdapters, renderTemplate, writeJournal, detectTools, compareProviders } from 'hammerkit'
+import { getAdapter, getAdapters, renderTemplate, writeJournal, detectTools, compareProviders } from 'runework'
 
 // Or use subpath imports for targeted access
-import { ClaudeAdapter, CodexAdapter } from 'hammerkit/adapters'
-import { runCli, renderTemplate } from 'hammerkit/core'
-import { compareProviders } from 'hammerkit/workflows'
+import { ClaudeAdapter, CodexAdapter } from 'runework/adapters'
+import { runCli, renderTemplate } from 'runework/core'
+import { compareProviders } from 'runework/workflows'
 
 // zx for shell operations
 import { $ } from 'zx'
@@ -104,15 +104,15 @@ Three ways, pick what you prefer:
 ### Option 1: node directly (recommended)
 
 ```bash
-cd .hammerkit && node scripts/review.ts
-cd .hammerkit && node scripts/explain.ts src/main.rs
+cd .runework && node scripts/review.ts
+cd .runework && node scripts/explain.ts src/main.rs
 ```
 
-Or use the npm scripts defined in `.hammerkit/package.json`:
+Or use the npm scripts defined in `.runework/package.json`:
 
 ```bash
-cd .hammerkit && npm run review
-cd .hammerkit && npm run explain -- src/main.rs
+cd .runework && npm run review
+cd .runework && npm run explain -- src/main.rs
 ```
 
 ### Option 2: Shebang (most ergonomic)
@@ -120,9 +120,9 @@ cd .hammerkit && npm run explain -- src/main.rs
 Scripts have `#!/usr/bin/env node`. Make them executable:
 
 ```bash
-chmod +x .hammerkit/scripts/*.ts
-.hammerkit/scripts/review.ts
-.hammerkit/scripts/explain.ts src/main.rs
+chmod +x .runework/scripts/*.ts
+.runework/scripts/review.ts
+.runework/scripts/explain.ts src/main.rs
 ```
 
 ### Option 3: Wrapper scripts (for teams)
@@ -131,15 +131,15 @@ Create thin shell wrappers in your project's `bin/` directory:
 
 ```bash
 #!/usr/bin/env bash
-cd "$(dirname "$0")/../.hammerkit" && node scripts/review.ts "$@"
+cd "$(dirname "$0")/../.runework" && node scripts/review.ts "$@"
 ```
 
 ## Writing pipelines
 
-Pipelines are the primary local workflow unit. Put the actual workflow meat in `.hammerkit/pipelines/*.ts`, and use hammerkit's runtime helpers for checkpoints, child-pipeline calls, and loop control instead of rebuilding that machinery in every repo.
+Pipelines are the primary local workflow unit. Put the actual workflow meat in `.runework/pipelines/*.ts`, and use runework's runtime helpers for checkpoints, child-pipeline calls, and loop control instead of rebuilding that machinery in every repo.
 
 ```ts
-import { defineWorkflowPipeline } from 'hammerkit/pipelines'
+import { defineWorkflowPipeline } from 'runework/pipelines'
 
 export default defineWorkflowPipeline({
   version: 1,
@@ -185,21 +185,21 @@ Pipeline runtime helpers available on `ctx`:
 Run a pipeline with:
 
 ```bash
-cd .hammerkit && npx hammerkit-pipeline code-review
+cd .runework && npx runework-pipeline code-review
 ```
 
 Resume a failed or interrupted run with:
 
 ```bash
-cd .hammerkit && npx hammerkit-pipeline code-review --resume-run <run-id>
+cd .runework && npx runework-pipeline code-review --resume-run <run-id>
 ```
 
 ## Prompt templates
 
-Put reusable prompts in `.hammerkit/prompts/` with `{{variable}}` placeholders:
+Put reusable prompts in `.runework/prompts/` with `{{variable}}` placeholders:
 
 ```markdown
-<!-- .hammerkit/prompts/review-file.md -->
+<!-- .runework/prompts/review-file.md -->
 Review {{path}} for:
 - Logic errors
 - Missing error handling
@@ -209,42 +209,42 @@ Review {{path}} for:
 Load and render in scripts:
 
 ```ts
-import { renderTemplate } from 'hammerkit'
+import { renderTemplate } from 'runework'
 import { readFile } from 'node:fs/promises'
 
-const template = await readFile('.hammerkit/prompts/review-file.md', 'utf8')
+const template = await readFile('.runework/prompts/review-file.md', 'utf8')
 const prompt = renderTemplate(template, { path: 'src/auth.rs' })
 ```
 
 ## Journal
 
-Every adapter run can be logged to `.hammerkit/.work/runs/`. Pass the path when calling `writeJournal`:
+Every adapter run can be logged to `.runework/.work/runs/`. Pass the path when calling `writeJournal`:
 
 ```ts
-import { writeJournal } from 'hammerkit'
+import { writeJournal } from 'runework'
 
 await writeJournal(
   { type: 'review', provider: 'claude', ok: true },
-  '.hammerkit/.work/runs',
+  '.runework/.work/runs',
 )
-// Writes: .hammerkit/.work/runs/2026-03-22/2026-03-22T10-30-00-000Z-a1b2c3d4.json
+// Writes: .runework/.work/runs/2026-03-22/2026-03-22T10-30-00-000Z-a1b2c3d4.json
 ```
 
 The `.work/` directory is gitignored by default.
 
-## Updating hammerkit
+## Updating runework
 
 ```bash
-cd /path/to/hammerkit && git pull
-cd /path/to/your/repo/.hammerkit && npm install
+cd /path/to/runework && git pull
+cd /path/to/your/repo/.runework && npm install
 ```
 
-The default scaffold uses a local `file:` dependency while hammerkit is private. When you publish it later, switch `.hammerkit/package.json` to a versioned dependency:
+When you scaffold from a local checkout, the default `.runework/package.json` uses a local `file:` dependency. Installed `runework-init` writes a versioned dependency instead:
 
 ```json
 {
   "dependencies": {
-    "hammerkit": "^0.2.0"
+    "runework": "^0.2.0"
   }
 }
 ```
@@ -254,7 +254,7 @@ The default scaffold uses a local `file:` dependency while hammerkit is private.
 Check which AI CLIs are installed:
 
 ```ts
-import { detectTools } from 'hammerkit'
+import { detectTools } from 'runework'
 
 const tools = await detectTools()
 const available = tools.filter(t => t.available)
@@ -264,7 +264,7 @@ console.log(available.map(t => `${t.name} ${t.version}`))
 Or from the command line:
 
 ```bash
-cd .hammerkit && npx hammerkit-detect
+cd .runework && npx runework-detect
 ```
 
 ## Comparing providers
@@ -272,7 +272,7 @@ cd .hammerkit && npx hammerkit-detect
 Run the same prompt across multiple providers in parallel:
 
 ```ts
-import { getAdapters, compareProviders } from 'hammerkit'
+import { getAdapters, compareProviders } from 'runework'
 
 const results = await compareProviders({
   adapters: getAdapters(),

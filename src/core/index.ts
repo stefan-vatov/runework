@@ -1,5 +1,1 @@
-export * from './run-cli.ts'
-export * from './json.ts'
-export * from './journal.ts'
-export * from './render-template.ts'
-export * from './detect.ts'
+export * from '@runework/core/core'
