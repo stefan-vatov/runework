@@ -1,5 +1,38 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "release": {
+    "projects": [
+      "runework",
+      "runework-core",
+      "runework-workflows",
+      "runework-pipelines",
+      "runework-cli"
+    ],
+    "releaseTagPattern": "v{version}",
+    "git": {
+      "commit": true,
+      "tag": true
+    },
+    "conventionalCommits": {
+      "types": {
+        "chore": {
+          "semverBump": "patch",
+          "changelog": {
+            "hidden": false,
+            "title": "🏡 Chore"
+          }
+        }
+      }
+    },
+    "version": {
+      "conventionalCommits": true,
+      "fallbackCurrentVersionResolver": "disk",
+      "preserveLocalDependencyProtocols": false
+    },
+    "changelog": {
+      "automaticFromRef": true
+    }
+  },
   "targetDefaults": {
     "build": {
       "dependsOn": ["^build"],
