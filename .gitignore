@@ -5,6 +5,9 @@ dist
 *.tsbuildinfo
 *.tgz
 
+# nx
+.nx
+
 # hammerkit
 .hammerkit/node_modules
 .hammerkit/.work

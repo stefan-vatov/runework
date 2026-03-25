@@ -1,4 +1,4 @@
-import { readFile, appendFile, stat } from 'node:fs/promises'
+import { readFile, appendFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 /**

@@ -1,4 +1,4 @@
-import type { AgentAdapter } from '../adapters/types.ts'
+import type { AgentAdapter } from '@hammerkit/core'
 
 export type PipelineProgressEvent =
   | { type: 'start-parallel'; names: string[] }

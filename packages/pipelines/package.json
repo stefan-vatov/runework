@@ -1,0 +1,21 @@
+{
+  "name": "@hammerkit/pipelines",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "dependencies": {
+    "@hammerkit/core": "file:../core",
+    "@types/react": "^19.2.14",
+    "ink": "^6.8.0",
+    "ink-spinner": "^5.0.0",
+    "react": "^19.2.4"
+  }
+}

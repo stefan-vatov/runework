@@ -1,10 +1,13 @@
 {
   "name": "hammerkit",
-  "private": true,
+  "private": false,
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
   "description": "zx-powered automation toolkit for CLI coding agents (codex, claude, opencode)",
+  "workspaces": [
+    "packages/*"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -62,6 +65,7 @@
     "src/index.ts",
     "src/ink.ts",
     "src/models.ts",
+    "src/zx.ts",
     "templates",
     "README.md",
     "LICENSE"
@@ -71,23 +75,42 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "prepare": "npm run build",
-    "test": "node --conditions=source --test src/hammerkit.test.ts",
-    "typecheck": "tsc --noEmit",
+    "prepare": "node scripts/prepare.mjs",
+    "test": "npx nx run-many -t test --all",
+    "test:source": "node --conditions=source --test src/hammerkit.test.ts",
+    "test:smoke": "node --conditions=source --test src/hammerkit.smoke.test.ts",
+    "typecheck": "tsc -b",
+    "lint": "eslint .",
+    "lint:all": "npx nx run-many -t lint --all",
+    "build:all": "npx nx run-many -t build --all",
     "run": "node --conditions=source src/cli/run.ts",
     "compare": "node --conditions=source src/cli/compare.ts",
     "detect": "node --conditions=source src/cli/detect.ts",
     "pipeline": "node --conditions=source src/cli/pipeline.ts"
   },
   "dependencies": {
+    "@hammerkit/core": "file:packages/core",
+    "@hammerkit/workflows": "file:packages/workflows",
+    "@hammerkit/pipelines": "file:packages/pipelines",
+    "@hammerkit/cli": "file:packages/cli",
     "@types/react": "^19.2.14",
     "ink": "^6.8.0",
     "ink-spinner": "^5.0.0",
     "react": "^19.2.4",
     "zx": "^8.0.0"
   },
+  "bundleDependencies": [
+    "@hammerkit/core",
+    "@hammerkit/workflows",
+    "@hammerkit/pipelines",
+    "@hammerkit/cli"
+  ],
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0"
+    "eslint": "^9.0.0",
+    "husky": "^9.0.0",
+    "nx": "^21.0.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0"
   }
 }

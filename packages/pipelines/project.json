@@ -1,0 +1,29 @@
+{
+  "name": "hammerkit-pipelines",
+  "root": "packages/pipelines",
+  "sourceRoot": "packages/pipelines/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "command": "node scripts/build-package.mjs packages/pipelines/tsconfig.build.json",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint packages/pipelines/src/",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node --conditions=source --test packages/pipelines/src/**/*.test.ts",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

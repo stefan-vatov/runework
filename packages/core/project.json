@@ -1,0 +1,29 @@
+{
+  "name": "hammerkit-core",
+  "root": "packages/core",
+  "sourceRoot": "packages/core/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "command": "node scripts/build-package.mjs packages/core/tsconfig.build.json",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint packages/core/src/",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node --conditions=source --test packages/core/src/**/*.test.ts",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

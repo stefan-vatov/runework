@@ -3,8 +3,8 @@
  * Uses React.createElement (no JSX) since Node 24 type stripping
  * doesn't handle JSX transforms.
  */
-import React, { useState, useCallback } from 'react'
-import { render, Box, Text, useApp } from 'ink'
+import React, { useState } from 'react'
+import { render, Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
 import type { PipelineResult } from './types.ts'
 

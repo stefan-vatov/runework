@@ -239,7 +239,7 @@ cd /path/to/hammerkit && git pull
 cd /path/to/your/repo/.hammerkit && npm install
 ```
 
-The default scaffold uses a local `file:` dependency while hammerkit is private. When you publish it later, switch `.hammerkit/package.json` to a versioned dependency:
+When you scaffold from a local checkout, the default `.hammerkit/package.json` uses a local `file:` dependency. Installed `hammerkit-init` writes a versioned dependency instead:
 
 ```json
 {

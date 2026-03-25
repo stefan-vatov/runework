@@ -1,1 +1,1 @@
-export * from './compare.ts'
+export * from '@hammerkit/workflows'

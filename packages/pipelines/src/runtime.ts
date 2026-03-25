@@ -365,14 +365,6 @@ export async function createPipelineWorkflowRuntime(
   }
 
   async function complete(result: PipelineResult): Promise<PipelineSpawnResult> {
-    state = {
-      ...state,
-      status: 'completed',
-      completedAt: new Date().toISOString(),
-      error: undefined,
-    }
-    await persist()
-
     const finalResult: PipelineSpawnResult = {
       ...result,
       runId: opts.runId,
@@ -380,7 +372,13 @@ export async function createPipelineWorkflowRuntime(
       outputs: { ...state.outputs, ...(result.outputs ?? {}) },
     }
 
-    state.result = finalResult
+    state = {
+      ...state,
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+      error: undefined,
+      result: finalResult,
+    }
     await persist()
 
     await appendEvent(eventsPath, {

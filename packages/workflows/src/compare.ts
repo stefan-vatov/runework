@@ -1,11 +1,10 @@
-import { writeJournal } from '../core/journal.ts'
-import { renderTemplate } from '../core/render-template.ts'
+import { writeJournal, renderTemplate } from '@hammerkit/core'
 import type {
   AgentAdapter,
   AgentRunRequest,
   AgentRunResult,
-} from '../adapters/types.ts'
-import { getUnsupportedRequestOptions } from '../adapters/types.ts'
+} from '@hammerkit/core'
+import { getUnsupportedRequestOptions } from '@hammerkit/core'
 
 export type CompareRequest = {
   adapters: AgentAdapter[]

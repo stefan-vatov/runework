@@ -1,7 +1,7 @@
 import { readdir, mkdir, readFile, stat } from 'node:fs/promises'
 import { join, resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { getAdapters } from '../adapters/registry.ts'
+import { getAdapters } from '@hammerkit/core'
 import { ensureGitignoreEntries } from './gitignore.ts'
 import {
   PipelineRunError,

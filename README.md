@@ -15,7 +15,7 @@ Install any wrapped CLIs separately:
 - `claude`
 - `opencode`
 
-This package is private for now. To scaffold another repo from a local checkout, run:
+To scaffold another repo from a local checkout, run:
 
 ```bash
 node --conditions=source src/cli/init.ts /path/to/target-repo

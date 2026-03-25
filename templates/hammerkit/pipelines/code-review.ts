@@ -164,10 +164,8 @@ const pipeline = defineWorkflowPipeline({
       )
     })
 
-    const outputs: Record<string, string> = {}
     for (const review of reviews) {
-      const path = await ctx.writeOutput(`${review.name}-review.md`, review.text)
-      outputs[review.name] = path
+      await ctx.writeOutput(`${review.name}-review.md`, review.text)
     }
 
     const synthesisResult = reviews.length === 1
@@ -194,12 +192,10 @@ const pipeline = defineWorkflowPipeline({
         })
 
     const finalPath = await ctx.writeOutput('final-review.md', synthesisResult.text)
-    outputs.final = finalPath
 
     return {
       ok: synthesisResult.ok,
       outputPath: finalPath,
-      outputs,
       summary: `Review complete (${reviews.length} models)`,
     }
   },
