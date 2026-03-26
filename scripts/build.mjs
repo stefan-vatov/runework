@@ -1,17 +1,23 @@
 #!/usr/bin/env node
 /**
  * Top-level workspace build entry point.
- * Delegates to Nx for dependency-aware build ordering.
+ * Uses direct package builds so publish/prepare does not depend on Nx workers.
  */
 import { spawnSync } from 'node:child_process'
 
-const result = spawnSync('npx', ['nx', 'run-many', '-t', 'build', '--all'], {
-  env: {
-    ...process.env,
-    NX_DAEMON: 'false',
-  },
-  stdio: 'inherit',
-  shell: true,
-})
+const commands = [
+  ['scripts/build-package.mjs', 'packages/core/tsconfig.build.json'],
+  ['scripts/build-package.mjs', 'packages/pipelines/tsconfig.build.json'],
+  ['scripts/build-package.mjs', 'packages/cli/tsconfig.build.json'],
+  ['scripts/build-package.mjs', 'tsconfig.build.json', '--chmod', 'dist/cli'],
+]
 
-process.exit(result.status ?? 1)
+for (const args of commands) {
+  const result = spawnSync(process.execPath, args, {
+    stdio: 'inherit',
+  })
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1)
+  }
+}

@@ -77,7 +77,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "lint:all": "npx nx run-many -t lint --all",
-    "build:all": "npx nx run-many -t build --all",
+    "build:all": "node scripts/build.mjs",
     "run": "node --conditions=source src/cli/run.ts",
     "detect": "node --conditions=source src/cli/detect.ts",
     "pipeline": "node --conditions=source src/cli/pipeline.ts"

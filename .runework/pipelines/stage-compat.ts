@@ -1,24 +1,59 @@
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 
-import { defineWorkflowPipeline } from './runtime.ts'
+import { defineWorkflowPipeline } from 'runework/pipelines'
 import type {
   PipelineContext,
   PipelineFn,
   PipelineResult,
-  StageDefinition,
-  StageJobContext,
-  StageJobDefinition,
-  StageJobResult,
-  StageParallelGroupDefinition,
-  StagePipelineDefinition,
-  StageScopeContext,
-  StageVariables,
-} from './types.ts'
+} from 'runework/pipelines'
 
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
+export type StageVariables = Record<string, unknown>
+
+export type StageScopeContext<TVars extends StageVariables = StageVariables> = PipelineContext & {
+  readonly vars: Readonly<TVars>
+}
+
+export type StageJobContext<TVars extends StageVariables = StageVariables> = StageScopeContext<TVars> & {
+  readonly stageId: string
+  readonly stageExecutionId: string
+  readonly stageOutputDir: string
+  readonly jobId: string
+  readonly jobExecutionId: string
+  writeStageOutput(filename: string, content: string): Promise<string>
+}
+
+export type StageJobResult<TVars extends StageVariables = StageVariables> = {
+  vars?: Partial<TVars>
+}
+
+export type StageJobDefinition<TVars extends StageVariables = StageVariables> = {
+  id: string
+  label?: string
+  when?: (ctx: StageScopeContext<TVars>) => boolean | Promise<boolean>
+  run: (ctx: StageJobContext<TVars>) => Promise<StageJobResult<TVars> | void>
+}
+
+export type StageParallelGroupDefinition<TVars extends StageVariables = StageVariables> = {
+  parallel: StageJobDefinition<TVars>[]
+}
+
+export type StageDefinition<TVars extends StageVariables = StageVariables> = {
+  id: string
+  label?: string
+  when?: (ctx: StageScopeContext<TVars>) => boolean | Promise<boolean>
+  repeat?: {
+    count: number | ((ctx: StageScopeContext<TVars>) => number | Promise<number>)
+  }
+  steps: Array<StageJobDefinition<TVars> | StageParallelGroupDefinition<TVars> | StageDefinition<TVars>>
+}
+
+export type StagePipelineDefinition<TVars extends StageVariables = StageVariables> = {
+  version?: number
+  variables?: TVars | ((ctx: PipelineContext) => TVars | Promise<TVars>)
+  stages: StageDefinition<TVars>[]
+  result: (ctx: StageScopeContext<TVars>) => PipelineResult | Promise<PipelineResult>
+}
 
 const SAFE_ID = /^[a-zA-Z0-9_-]+$/
 const MAX_REPEAT_COUNT = 10_000
@@ -42,25 +77,25 @@ function assertSafeId(id: string, kind: string, parentPath: string): void {
   }
 }
 
-function isParallelGroup(
-  step: StageJobDefinition | StageParallelGroupDefinition | StageDefinition,
-): step is StageParallelGroupDefinition {
-  return 'parallel' in step && Array.isArray((step as StageParallelGroupDefinition).parallel)
+function isParallelGroup<TVars extends StageVariables>(
+  step: StageJobDefinition<TVars> | StageParallelGroupDefinition<TVars> | StageDefinition<TVars>,
+): step is StageParallelGroupDefinition<TVars> {
+  return 'parallel' in step && Array.isArray((step as StageParallelGroupDefinition<TVars>).parallel)
 }
 
-function isStage(
-  step: StageJobDefinition | StageParallelGroupDefinition | StageDefinition,
-): step is StageDefinition {
-  return 'stages' in step || ('steps' in step && !('run' in step))
+function isStage<TVars extends StageVariables>(
+  step: StageJobDefinition<TVars> | StageParallelGroupDefinition<TVars> | StageDefinition<TVars>,
+): step is StageDefinition<TVars> {
+  return 'steps' in step && !('run' in step)
 }
 
-function isJob(
-  step: StageJobDefinition | StageParallelGroupDefinition | StageDefinition,
-): step is StageJobDefinition {
-  return 'run' in step && typeof (step as StageJobDefinition).run === 'function'
+function isJob<TVars extends StageVariables>(
+  step: StageJobDefinition<TVars> | StageParallelGroupDefinition<TVars> | StageDefinition<TVars>,
+): step is StageJobDefinition<TVars> {
+  return 'run' in step && typeof (step as StageJobDefinition<TVars>).run === 'function'
 }
 
-function validateStage(stage: StageDefinition, parentPath: string): void {
+function validateStage<TVars extends StageVariables>(stage: StageDefinition<TVars>, parentPath: string): void {
   assertSafeId(stage.id, 'Stage', parentPath)
   const path = parentPath ? `${parentPath}/${stage.id}` : stage.id
 
@@ -98,7 +133,7 @@ function validateStage(stage: StageDefinition, parentPath: string): void {
   }
 }
 
-function validateDefinition(definition: StagePipelineDefinition): void {
+function validateDefinition<TVars extends StageVariables>(definition: StagePipelineDefinition<TVars>): void {
   if (!definition.stages || definition.stages.length === 0) {
     throw new Error('StagePipelineDefinition must have at least one stage')
   }
@@ -112,10 +147,6 @@ function validateDefinition(definition: StagePipelineDefinition): void {
     validateStage(stage, '')
   }
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function elapsed(start: number): string {
   return ((Date.now() - start) / 1000).toFixed(1)
@@ -246,8 +277,8 @@ function describeChangedVarKeys(previous: StageVariables, current: StageVariable
     .sort()
 }
 
-async function resolveInitialVars(
-  definition: StagePipelineDefinition,
+async function resolveInitialVars<TVars extends StageVariables>(
+  definition: StagePipelineDefinition<TVars>,
   ctx: PipelineContext,
 ): Promise<StageVariables> {
   const raw = typeof definition.variables === 'function'
@@ -291,20 +322,18 @@ function assertValidRepeatCount(stagePathId: string, raw: number): number {
   return raw
 }
 
-// Object.create() keeps the underlying PipelineContext methods shared while
-// presenting an immutable vars snapshot to each stage/job evaluation.
-function makeScopeContext(
+function makeScopeContext<TVars extends StageVariables>(
   ctx: PipelineContext,
-  vars: StageVariables,
-): StageScopeContext {
+  vars: TVars,
+): StageScopeContext<TVars> {
   const frozenVars = makeImmutableSnapshot(cloneVars(vars))
   return Object.create(ctx, {
     vars: { value: frozenVars, writable: false, enumerable: true, configurable: false },
-  }) as StageScopeContext
+  }) as StageScopeContext<TVars>
 }
 
-function makeJobContext(
-  scopeCtx: StageScopeContext,
+function makeJobContext<TVars extends StageVariables>(
+  scopeCtx: StageScopeContext<TVars>,
   opts: {
     stageId: string
     stageExecutionId: string
@@ -312,8 +341,8 @@ function makeJobContext(
     jobId: string
     jobExecutionId: string
   },
-): StageJobContext {
-  const jobCtx = Object.create(scopeCtx, {
+): StageJobContext<TVars> {
+  return Object.create(scopeCtx, {
     stageId: { value: opts.stageId, writable: false, enumerable: true },
     stageExecutionId: { value: opts.stageExecutionId, writable: false, enumerable: true },
     stageOutputDir: { value: opts.stageOutputDir, writable: false, enumerable: true },
@@ -327,34 +356,27 @@ function makeJobContext(
       writable: false,
       enumerable: true,
     },
-  }) as StageJobContext
-  return jobCtx
+  }) as StageJobContext<TVars>
 }
 
-// ---------------------------------------------------------------------------
-// Executor
-// ---------------------------------------------------------------------------
-
-type ExecutorOpts = {
+type ExecutorOpts<TVars extends StageVariables> = {
   ctx: PipelineContext
-  vars: StageVariables
-  persistVars: (vars: StageVariables) => Promise<void>
+  vars: TVars
+  persistVars: (vars: TVars) => Promise<void>
 }
 
-async function executeJob(
-  job: StageJobDefinition,
+async function executeJob<TVars extends StageVariables>(
+  job: StageJobDefinition<TVars>,
   stageId: string,
   stageExecutionId: string,
   stageOutputDir: string,
   executionPathPrefix: string,
-  opts: ExecutorOpts,
-): Promise<StageJobResult | void> {
+  opts: ExecutorOpts<TVars>,
+): Promise<StageJobResult<TVars> | void> {
   const { ctx, vars } = opts
   const scopeCtx = makeScopeContext(ctx, vars)
-
   const jobExecutionId = `${executionPathPrefix}/${job.id}`
 
-  // Evaluate when condition
   if (job.when) {
     const shouldRun = await job.when(scopeCtx)
     if (!shouldRun) {
@@ -415,19 +437,18 @@ async function executeJob(
   }
 }
 
-async function executeParallelGroup(
-  group: StageParallelGroupDefinition,
+async function executeParallelGroup<TVars extends StageVariables>(
+  group: StageParallelGroupDefinition<TVars>,
   stageId: string,
   stageExecutionId: string,
   stageOutputDir: string,
   executionPathPrefix: string,
-  opts: ExecutorOpts,
+  opts: ExecutorOpts<TVars>,
 ): Promise<void> {
   const { ctx, vars } = opts
   const scopeCtx = makeScopeContext(ctx, vars)
+  const enabled: StageJobDefinition<TVars>[] = []
 
-  // Evaluate which jobs should run (all see the same pre-group vars)
-  const enabled: StageJobDefinition[] = []
   for (const job of group.parallel) {
     const jobExecutionId = `${executionPathPrefix}/${job.id}`
     if (job.when) {
@@ -448,7 +469,6 @@ async function executeParallelGroup(
 
   if (enabled.length === 0) return
 
-  // Run all enabled jobs concurrently
   const settled = await Promise.allSettled(
     enabled.map(async (job) => {
       const jobExecutionId = `${executionPathPrefix}/${job.id}`
@@ -499,7 +519,6 @@ async function executeParallelGroup(
     }),
   )
 
-  // Check for failures
   const failures = settled.flatMap((outcome) =>
     outcome.status === 'rejected' ? [outcome.reason] : [],
   )
@@ -513,29 +532,25 @@ async function executeParallelGroup(
     )
   }
 
-  // Merge variable patches in declaration order
   for (const outcome of settled) {
     if (outcome.status === 'fulfilled' && outcome.value?.result?.vars) {
       Object.assign(opts.vars, outcome.value.result.vars)
     }
   }
-
 }
 
-async function executeStage(
-  stage: StageDefinition,
+async function executeStage<TVars extends StageVariables>(
+  stage: StageDefinition<TVars>,
   executionPathPrefix: string,
   parentOutputDir: string,
   parentExecutionId: string | undefined,
-  opts: ExecutorOpts,
+  opts: ExecutorOpts<TVars>,
   persistOnSuccess = true,
 ): Promise<void> {
   const { ctx } = opts
   const scopeCtx = makeScopeContext(ctx, opts.vars)
-
   const stagePathId = executionPathPrefix ? `${executionPathPrefix}/${stage.id}` : stage.id
 
-  // Evaluate when condition
   if (stage.when) {
     const shouldRun = await stage.when(scopeCtx)
     if (!shouldRun) {
@@ -550,7 +565,6 @@ async function executeStage(
     }
   }
 
-  // Resolve repeat count
   let totalIterations = 1
   if (stage.repeat) {
     const repeatCheckpointId = `stages:repeat:${stagePathId}`
@@ -567,15 +581,11 @@ async function executeStage(
   }
 
   for (let iteration = 1; iteration <= totalIterations; iteration++) {
-    const iterationVars = cloneVars(opts.vars)
-    const iterationOpts: ExecutorOpts = { ...opts, vars: iterationVars }
-
-    // Execution ID is unique per iteration (used for step IDs, progress, TUI keying)
+    const iterationVars = cloneVars(opts.vars) as TVars
+    const iterationOpts: ExecutorOpts<TVars> = { ...opts, vars: iterationVars }
     const stageExecutionId = totalIterations > 1
       ? `${stagePathId}[${iteration}]`
       : stagePathId
-
-    // Output dir uses full ancestry path so nested stages don't collide
     const stageOutputDir = resolveStageOutputDir(parentOutputDir, stage.id, iteration, totalIterations)
 
     ctx.progress({
@@ -591,7 +601,6 @@ async function executeStage(
     const stageStart = Date.now()
 
     try {
-      // Execute all steps in this stage sequentially
       for (const step of stage.steps) {
         if (isParallelGroup(step)) {
           await executeParallelGroup(
@@ -657,24 +666,19 @@ async function executeStage(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
 export function defineStagePipeline<TVars extends StageVariables = StageVariables>(
   definition: StagePipelineDefinition<TVars>,
 ): PipelineFn {
-  // Validate with erased generics (runtime check, no type param needed)
-  validateDefinition(definition as StagePipelineDefinition)
+  validateDefinition(definition)
 
   return defineWorkflowPipeline({
     version: definition.version,
     async run(ctx: PipelineContext): Promise<PipelineResult> {
-      const VARS_CHECKPOINT = 'stages:variables'
-      const INITIAL_VARS_CHECKPOINT = 'stages:initial-variables'
+      const varsCheckpoint = 'stages:variables'
+      const initialVarsCheckpoint = 'stages:initial-variables'
 
-      const initialVars = await resolveInitialVars(definition as StagePipelineDefinition, ctx)
-      const cachedInitialVars = await ctx.getCheckpoint<StageVariables>(INITIAL_VARS_CHECKPOINT)
+      const initialVars = await resolveInitialVars(definition, ctx)
+      const cachedInitialVars = await ctx.getCheckpoint<StageVariables>(initialVarsCheckpoint)
 
       if (ctx.isResume) {
         if (cachedInitialVars === undefined) {
@@ -690,33 +694,30 @@ export function defineStagePipeline<TVars extends StageVariables = StageVariable
           )
         }
       } else {
-        await ctx.checkpoint(INITIAL_VARS_CHECKPOINT, cloneVars(initialVars))
+        await ctx.checkpoint(initialVarsCheckpoint, cloneVars(initialVars))
       }
 
-      // Resolve working variables (frozen on evaluation, checkpointed after successful stages)
-      let vars: StageVariables
-      const cached = await ctx.getCheckpoint<StageVariables>(VARS_CHECKPOINT)
+      let vars: TVars
+      const cached = await ctx.getCheckpoint<TVars>(varsCheckpoint)
       if (cached !== undefined) {
-        vars = cloneVars(cached)
+        vars = cloneVars(cached) as TVars
       } else {
-        vars = cloneVars(initialVars)
-        await ctx.checkpoint(VARS_CHECKPOINT, cloneVars(vars))
+        vars = cloneVars(initialVars) as TVars
+        await ctx.checkpoint(varsCheckpoint, cloneVars(vars))
       }
 
-      async function persistVars(v: StageVariables): Promise<void> {
-        await ctx.checkpoint(VARS_CHECKPOINT, cloneVars(v))
+      async function persistVars(nextVars: TVars): Promise<void> {
+        await ctx.checkpoint(varsCheckpoint, cloneVars(nextVars))
       }
 
-      const executorOpts: ExecutorOpts = { ctx, vars, persistVars }
+      const executorOpts: ExecutorOpts<TVars> = { ctx, vars, persistVars }
 
-      // Execute stages sequentially
       for (const stage of definition.stages) {
-        await executeStage(stage as StageDefinition, '', '', undefined, executorOpts)
+        await executeStage(stage, '', '', undefined, executorOpts)
       }
 
-      // Build result
       const scopeCtx = makeScopeContext(ctx, vars)
-      return (definition.result as (ctx: StageScopeContext) => PipelineResult | Promise<PipelineResult>)(scopeCtx)
+      return definition.result(scopeCtx)
     },
   })
 }

@@ -1,9 +1,9 @@
 import { codex, detectTools } from 'runework'
-import { defineStagePipeline } from 'runework/pipelines'
-import type { StageScopeContext, StageJobContext, StageJobResult } from 'runework/pipelines'
 import { $ } from 'runework/zx'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { defineStagePipeline } from './stage-compat.ts'
+import type { StageScopeContext, StageJobContext, StageJobResult } from './stage-compat.ts'
 
 // ===========================================================================
 // Model selection
@@ -25,6 +25,7 @@ import { resolve } from 'node:path'
 
 const CODEX_MODEL = 'gpt-5.4'
 const CODEX_EXTRA_ARGS = ['--full-auto', '--config', 'model_reasoning_effort=xhigh']
+const ALIGNMENT_CYCLE_COUNT = 2
 const COMMIT_MAX_ATTEMPTS = 2
 
 // ===========================================================================
@@ -90,7 +91,7 @@ const pipeline = defineStagePipeline<AlignmentVars>({
     {
       id: 'constitutional-cycle',
       label: 'Constitutional alignment cycle',
-      repeat: { count: 2 },
+      repeat: { count: ALIGNMENT_CYCLE_COUNT },
       steps: [
         {
           id: 'align',
@@ -448,7 +449,7 @@ async function commitChanges(ctx: StageJobContext<AlignmentVars>): Promise<Stage
 // ===========================================================================
 
 function buildResult(ctx: StageScopeContext<AlignmentVars>) {
-  const totalCycles = 2
+  const totalCycles = ALIGNMENT_CYCLE_COUNT
   const commits = ctx.vars.commitCount
   const skipped = ctx.vars.skippedCommitCount
 

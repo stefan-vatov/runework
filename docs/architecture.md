@@ -24,7 +24,6 @@ runework/
     pipelines/
       runtime.ts       # durable steps, checkpoints, child runs, resume
       runner.ts        # load user-authored pipelines from .runework/pipelines/
-      stages.ts        # optional typed stage composition on top of the runtime
     cli/
       run.ts
       detect.ts
@@ -88,7 +87,7 @@ Core helpers:
 - `repeatUntil()` for resumable loops
 - `writeOutput()` for run artifacts
 
-`defineWorkflowPipeline()` and `defineStagePipeline()` are composition helpers over that same runtime. They provide structure, not methodology.
+`defineWorkflowPipeline()` is a light helper over that same runtime. Higher-order workflow shapes belong in consumer packages, not in the runtime itself.
 
 ## CLI surface
 

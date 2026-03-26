@@ -12,10 +12,14 @@ function runCommand(
   command: string,
   args: string[],
   cwd: string,
+  options?: {
+    env?: NodeJS.ProcessEnv
+  },
 ): SpawnSyncReturns<string> {
   return spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
+    env: options?.env,
   })
 }
 
@@ -72,8 +76,15 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
   const packDir = join(tmpRoot, 'pack')
   const consumerDir = join(tmpRoot, 'consumer')
   const targetDir = join(consumerDir, 'repo')
+  const npmCacheDir = join(tmpRoot, 'npm-cache')
+  const npmEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    // Keep npm cache writes inside the test sandbox instead of the caller's global cache.
+    npm_config_cache: npmCacheDir,
+  }
   await mkdir(packDir, { recursive: true })
   await mkdir(consumerDir, { recursive: true })
+  await mkdir(npmCacheDir, { recursive: true })
 
   buildWorkspace(repoRoot)
 
@@ -82,6 +93,7 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
       npmCommand,
       ['pack', '--ignore-scripts', '--pack-destination', packDir],
       repoRoot,
+      { env: npmEnv },
     ),
     'npm pack failed for smoke test',
   )
@@ -94,12 +106,12 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
   const tarballPath = join(packDir, tarballs[0])
 
   assertSucceeded(
-    runCommand(npmCommand, ['init', '-y'], consumerDir),
+    runCommand(npmCommand, ['init', '-y'], consumerDir, { env: npmEnv }),
     'npm init failed in smoke test consumer',
   )
 
   assertSucceeded(
-    runCommand(npmCommand, ['install', '--ignore-scripts', tarballPath], consumerDir),
+    runCommand(npmCommand, ['install', '--ignore-scripts', tarballPath], consumerDir, { env: npmEnv }),
     'installing the packed tarball failed',
   )
 

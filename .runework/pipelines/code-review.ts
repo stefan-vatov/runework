@@ -1,8 +1,8 @@
 import { codex, claude, detectTools, opencode } from 'runework'
 import type { AgentAdapter } from 'runework'
-import { defineStagePipeline } from 'runework/pipelines'
-import type { StageScopeContext, StageJobContext, StageJobResult } from 'runework/pipelines'
 import { $ } from 'runework/zx'
+import { defineStagePipeline } from './stage-compat.ts'
+import type { StageScopeContext, StageJobContext, StageJobResult } from './stage-compat.ts'
 
 // ===========================================================================
 // Typed pipeline variables

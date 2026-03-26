@@ -18,8 +18,9 @@ if (build.status !== 0) {
 const repoRoot = resolve('.')
 const isRepoInstall = existsSync(resolve(repoRoot, '.git'))
 const isCI = process.env.CI === 'true' || process.env.CI === '1'
+const isDryRun = process.env.npm_config_dry_run === 'true'
 
-if (isRepoInstall && !isCI) {
+if (isRepoInstall && !isCI && !isDryRun) {
   const husky = spawnSync('npx', ['husky'], { stdio: 'inherit', shell: true })
   if (husky.status !== 0) {
     console.error('[runework] warning: Husky hook installation failed (exit %d)', husky.status)
