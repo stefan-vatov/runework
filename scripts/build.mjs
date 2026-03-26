@@ -6,6 +6,10 @@
 import { spawnSync } from 'node:child_process'
 
 const result = spawnSync('npx', ['nx', 'run-many', '-t', 'build', '--all'], {
+  env: {
+    ...process.env,
+    NX_DAEMON: 'false',
+  },
   stdio: 'inherit',
   shell: true,
 })

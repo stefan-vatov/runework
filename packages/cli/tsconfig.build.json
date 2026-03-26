@@ -9,7 +9,6 @@
   "exclude": ["src/**/*.test.ts"],
   "references": [
     { "path": "../core/tsconfig.build.json" },
-    { "path": "../workflows/tsconfig.build.json" },
     { "path": "../pipelines/tsconfig.build.json" }
   ]
 }

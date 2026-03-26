@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
@@ -23,12 +23,11 @@ test('initCommand scaffolds .runework/ with injected deps', async (t) => {
 
   const runeworkRoot = resolve('.')
   const code = await initCommand(
-    [targetDir, '--no-install', '--no-ai-config'],
+    [targetDir, '--no-install'],
     {
       packageRoot: runeworkRoot,
       packageVersion: '0.1.0',
       templatesRuneworkDir: join(runeworkRoot, 'templates', 'runework'),
-      templatesRepoLocalDir: join(runeworkRoot, 'templates', 'repo-local'),
       currentDir: join(runeworkRoot, 'src', 'cli'),
     },
   )
@@ -38,6 +37,13 @@ test('initCommand scaffolds .runework/ with injected deps', async (t) => {
     await readFile(join(targetDir, '.runework', 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string> }
   assert.equal(pkg.dependencies?.runework, `file:${runeworkRoot}`)
+
+  const scriptsDir = join(targetDir, '.runework', 'scripts')
+  const pipelinesDir = join(targetDir, '.runework', 'pipelines')
+  assert.equal((await stat(scriptsDir)).isDirectory(), true)
+  assert.equal((await stat(pipelinesDir)).isDirectory(), true)
+  assert.deepEqual(await readdir(scriptsDir), [])
+  assert.deepEqual(await readdir(pipelinesDir), [])
 })
 
 test('initCommand returns 1 when .runework/ exists without --force', async (t) => {
@@ -51,12 +57,11 @@ test('initCommand returns 1 when .runework/ exists without --force', async (t) =
 
   const runeworkRoot = resolve('.')
   const code = await initCommand(
-    [targetDir, '--no-install', '--no-ai-config'],
+    [targetDir, '--no-install'],
     {
       packageRoot: runeworkRoot,
       packageVersion: '0.1.0',
       templatesRuneworkDir: join(runeworkRoot, 'templates', 'runework'),
-      templatesRepoLocalDir: join(runeworkRoot, 'templates', 'repo-local'),
       currentDir: join(runeworkRoot, 'src', 'cli'),
     },
   )

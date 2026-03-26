@@ -1,6 +1,0 @@
-# Codex project config
-# See: https://github.com/openai/codex
-
-[project]
-# sandbox = "workspace-write"
-# approval_mode = "on-request"

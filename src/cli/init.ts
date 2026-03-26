@@ -18,7 +18,6 @@ async function main() {
     packageRoot: RUNEWORK_ROOT,
     packageVersion: manifest.version ?? '0.1.0',
     templatesRuneworkDir: join(RUNEWORK_ROOT, 'templates', 'runework'),
-    templatesRepoLocalDir: join(RUNEWORK_ROOT, 'templates', 'repo-local'),
     currentDir: __dirname,
   })
   process.exit(code)

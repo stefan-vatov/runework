@@ -1,6 +1,6 @@
 # runework
 
-Thin `zx` toolkit for orchestrating `codex`, `claude`, and `opencode` while keeping repo-specific prompts, rules, and pipeline policy inside each target codebase.
+Thin `zx` runtime for durable AI CLI execution. `runework` owns adapters, execution, journaling, templating, and a generic pipeline runtime. It does not ship prompts, review loops, agent rules, or starter workflows.
 
 ## Install
 
@@ -15,26 +15,12 @@ Install any wrapped CLIs separately:
 - `claude`
 - `opencode`
 
-To scaffold another repo from a local checkout, run:
-
-```bash
-node --conditions=source src/cli/init.ts /path/to/target-repo
-```
-
 ## CLI
 
-Single-provider runs:
+Single-provider run:
 
 ```bash
 npm run run -- codex "Summarize this repository"
-npm run run -- claude "Summarize this repository"
-npm run run -- opencode "Summarize this repository"
-```
-
-Cross-provider compare:
-
-```bash
-npm run compare -- "Summarize this repository"
 ```
 
 Availability check:
@@ -43,23 +29,25 @@ Availability check:
 npm run detect
 ```
 
-All runs are journaled into `.runework/.work/runs/`.
-
-## Releases
-
-This repo uses Nx Release for semantic versioning, changelog generation, and git tags. The public root package and the private bundled workspace packages are versioned together so the publish manifest stays npm-compatible.
+Scaffold a blank `.runework/` package in another repo:
 
 ```bash
-npm run release:dry-run
-npm run release
+node --conditions=source src/cli/init.ts /path/to/target-repo
 ```
 
-`npm run release` now uses conventional commits for non-interactive version selection. By default, `feat` triggers a minor release, while `fix` and `chore` trigger patch releases. Use `npm run release:patch`, `npm run release:minor`, or `npm run release:major` when you want to force a specific bump locally. See [`docs/releasing.md`](docs/releasing.md) for the exact workflow and the later npm publishing path.
+Run a user-authored pipeline from that repo:
+
+```bash
+cd /path/to/target-repo/.runework
+npx runework-pipeline my-pipeline
+```
+
+All adapter runs are journaled into `.runework/.work/runs/` when your scripts or pipelines call `writeJournal()`.
 
 ## Library Usage
 
 ```ts
-import { compareProviders, getAdapter } from 'runework'
+import { getAdapter } from 'runework'
 
 const codex = getAdapter('codex')
 
@@ -67,32 +55,49 @@ const result = await codex.run({
   prompt: 'Summarize this repository',
   cwd: process.cwd(),
 })
+```
 
-const comparisons = await compareProviders({
-  adapters: [codex],
-  promptTemplate: 'Summarize {{repo}} in 3 bullets',
-  variables: { repo: 'runework' },
-  common: { cwd: process.cwd() },
+Provider-specific flags should go through `extraArgs`. Shared request fields stay limited to what the underlying adapter actually supports.
+
+For durable local workflows, author your own pipeline files:
+
+```ts
+import { defineWorkflowPipeline } from 'runework/pipelines'
+
+export default defineWorkflowPipeline({
+  version: 1,
+  async run(ctx) {
+    const summary = await ctx.step('summary', async () => 'ready')
+    const outputPath = await ctx.writeOutput('summary.txt', summary)
+    return { ok: true, outputPath, summary: 'pipeline complete' }
+  },
 })
 ```
 
-Provider-specific flags should go through `extraArgs`. `compareProviders()` accepts only request fields supported by every selected adapter.
+## Scaffold
+
+`runework-init` creates a blank user-owned runtime package:
+
+```text
+.runework/
+  package.json
+  tsconfig.json
+  scripts/
+  pipelines/
+```
+
+You author the scripts, prompts, and policies inside that target repo. `runework` only provides the substrate.
 
 ## Layout
 
 ```text
 src/
   adapters/     provider wrappers and argv builders
-  cli/          small entrypoints
+  cli/          thin entrypoints
   core/         execution, templating, journaling, JSON helpers
-  pipelines/    durable local workflow runtime
-  workflows/    reusable orchestration
+  pipelines/    durable local pipeline runtime
 scripts/
   build.mjs     clean build + CLI permission fixup
 templates/
-  repo-local/   seed files for per-repo automation
+  runework/     blank .runework scaffold
 ```
-
-## Repo-Local Seeds
-
-Use `templates/repo-local/` as the seed for target repositories. Keep project-specific prompts, skills, rules, and local pipeline policy there so this repo stays focused on primitives and reusable workflows.

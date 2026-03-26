@@ -16,7 +16,6 @@
   ],
   "dependencies": {
     "@runework/core": "0.1.1",
-    "@runework/workflows": "0.1.1",
     "@runework/pipelines": "0.1.1",
     "zx": "^8.0.0"
   }

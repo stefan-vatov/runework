@@ -1,4 +1,4 @@
-import { $ } from 'zx'
+import { runCli } from './run-cli.ts'
 
 export type ToolInfo = {
   name: string
@@ -17,14 +17,23 @@ export async function detectTools(
   return Promise.all(
     names.map(async (name): Promise<ToolInfo> => {
       try {
-        const which = await $({ quiet: true, nothrow: true })`which ${name}`
+        const which = await runCli({
+          bin: 'which',
+          args: [name],
+          quiet: true,
+        })
         if (which.exitCode !== 0) return { name, available: false }
 
         const path = which.stdout.trim()
 
-        // Try --version, -V, version — different tools use different flags
+        // Try --version, -V, version because provider CLIs are inconsistent here.
         for (const flag of ['--version', '-V', 'version']) {
-          const ver = await $({ quiet: true, nothrow: true, timeout: '5s' })`${name} ${flag}`
+          const ver = await runCli({
+            bin: name,
+            args: [flag],
+            quiet: true,
+            timeoutMs: 5_000,
+          })
           if (ver.exitCode === 0 && ver.stdout.trim()) {
             return { name, available: true, path, version: ver.stdout.trim().split('\n')[0] }
           }

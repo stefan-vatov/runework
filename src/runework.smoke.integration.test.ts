@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
@@ -30,7 +30,35 @@ function assertSucceeded(
   assert.equal(result.status, 0, `${label}\n${detail}`)
 }
 
-test('packed artifact installs and runs generated scripts', async (t) => {
+function buildWorkspace(repoRoot: string) {
+  const commands: Array<{ args: string[]; label: string }> = [
+    {
+      args: ['scripts/build-package.mjs', 'packages/core/tsconfig.build.json'],
+      label: 'building @runework/core failed',
+    },
+    {
+      args: ['scripts/build-package.mjs', 'packages/pipelines/tsconfig.build.json'],
+      label: 'building @runework/pipelines failed',
+    },
+    {
+      args: ['scripts/build-package.mjs', 'packages/cli/tsconfig.build.json'],
+      label: 'building @runework/cli failed',
+    },
+    {
+      args: ['scripts/build-package.mjs', 'tsconfig.build.json', '--chmod', 'dist/cli'],
+      label: 'building root package failed',
+    },
+  ]
+
+  for (const command of commands) {
+    assertSucceeded(
+      runCommand(process.execPath, command.args, repoRoot),
+      command.label,
+    )
+  }
+}
+
+test('packed artifact installs and scaffolds a blank consumer runtime', async (t) => {
   const repoRoot = resolve('.')
   const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-pack-smoke-'))
   t.after(async () => {
@@ -47,10 +75,7 @@ test('packed artifact installs and runs generated scripts', async (t) => {
   await mkdir(packDir, { recursive: true })
   await mkdir(consumerDir, { recursive: true })
 
-  assertSucceeded(
-    runCommand(process.execPath, ['scripts/build.mjs'], repoRoot),
-    'workspace build failed before packing',
-  )
+  buildWorkspace(repoRoot)
 
   assertSucceeded(
     runCommand(
@@ -82,7 +107,7 @@ test('packed artifact installs and runs generated scripts', async (t) => {
   assertSucceeded(
     runCommand(
       initBin,
-      [targetDir, '--no-install', '--no-ai-config'],
+      [targetDir, '--no-install'],
       consumerDir,
     ),
     'installed runework-init failed',
@@ -94,12 +119,35 @@ test('packed artifact installs and runs generated scripts', async (t) => {
   assert.equal(generatedPkg.dependencies?.runework, `^${manifest.version}`)
 
   const runeworkDir = join(targetDir, '.runework')
+  const scriptsDir = join(runeworkDir, 'scripts')
+  const pipelinesDir = join(runeworkDir, 'pipelines')
+  assert.equal((await stat(scriptsDir)).isDirectory(), true)
+  assert.equal((await stat(pipelinesDir)).isDirectory(), true)
+  assert.deepEqual(await readdir(scriptsDir), [])
+  assert.deepEqual(await readdir(pipelinesDir), [])
+
+  await writeFile(
+    join(pipelinesDir, 'hello.ts'),
+    [
+      "import { defineWorkflowPipeline } from 'runework/pipelines'",
+      '',
+      'export default defineWorkflowPipeline({',
+      '  version: 1,',
+      '  async run(ctx) {',
+      "    return { ok: true, summary: `hello ${ctx.runId}` }",
+      '  },',
+      '})',
+      '',
+    ].join('\n'),
+    'utf8',
+  )
+
   const pipelineImport = runCommand(
     process.execPath,
     [
       '--input-type=module',
       '-e',
-      "const mod = await import('./pipelines/code-review.ts'); if (typeof mod.default !== 'function') throw new Error('generated pipeline did not export a runnable default')",
+      "const mod = await import('./pipelines/hello.ts'); if (typeof mod.default !== 'function') throw new Error('user-authored pipeline did not export a runnable default')",
     ],
     runeworkDir,
   )

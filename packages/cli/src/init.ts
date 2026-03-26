@@ -9,14 +9,12 @@ export type InitDeps = {
   packageRoot: string
   packageVersion: string
   templatesRuneworkDir: string
-  templatesRepoLocalDir: string
   currentDir: string
 }
 
 function parseArgs(argv: string[]) {
   let targetDir = '.'
   let noInstall = false
-  let noAiConfig = false
   let force = false
   let runeworkUrl: string | undefined
 
@@ -24,8 +22,6 @@ function parseArgs(argv: string[]) {
     const arg = argv[i]
     if (arg === '--no-install') {
       noInstall = true
-    } else if (arg === '--no-ai-config') {
-      noAiConfig = true
     } else if (arg === '--force') {
       force = true
     } else if (arg === '--runework-url' && argv[i + 1]) {
@@ -35,7 +31,7 @@ function parseArgs(argv: string[]) {
     }
   }
 
-  return { targetDir: resolve(targetDir), noInstall, noAiConfig, force, runeworkUrl }
+  return { targetDir: resolve(targetDir), noInstall, force, runeworkUrl }
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -45,12 +41,6 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-async function copyIfMissing(src: string, dest: string, recursive = false) {
-  if (await exists(dest)) return false
-  await cp(src, dest, { recursive })
-  return true
 }
 
 export async function initCommand(argv: string[], deps: InitDeps): Promise<number> {
@@ -73,71 +63,45 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
 
   console.error(`runework: initializing .runework/ in ${flags.targetDir}`)
 
-  // 1. Create directory structure
+  // 1. Create blank user-owned directory structure.
   await mkdir(join(runeworkDir, 'scripts'), { recursive: true })
-  await mkdir(join(runeworkDir, 'prompts'), { recursive: true })
+  await mkdir(join(runeworkDir, 'pipelines'), { recursive: true })
 
-  // 2. Write package.json from template
+  // 2. Write package.json from template.
   const pkgTemplate = await readFile(join(deps.templatesRuneworkDir, 'package.json.tmpl'), 'utf8')
   const pkgContent = renderTemplate(pkgTemplate, { runeworkUrl })
   await writeFile(join(runeworkDir, 'package.json'), pkgContent, 'utf8')
 
-  // 3. Copy tsconfig.json
+  // 3. Copy tsconfig.json.
   await cp(join(deps.templatesRuneworkDir, 'tsconfig.json'), join(runeworkDir, 'tsconfig.json'))
 
-  // 4. Copy example scripts
-  await cp(join(deps.templatesRuneworkDir, 'scripts'), join(runeworkDir, 'scripts'), { recursive: true })
-  // Make scripts executable
+  // 4. Scripts are user-authored. Keep the scaffold blank but executable-safe.
   await $({ quiet: true, nothrow: true })`chmod +x ${join(runeworkDir, 'scripts')}/*.ts`
 
-  // 5. Copy prompt templates
-  await cp(join(deps.templatesRuneworkDir, 'prompts'), join(runeworkDir, 'prompts'), { recursive: true })
-
-  // 6. Copy AI tool configs to repo root (unless --no-ai-config)
-  if (!flags.noAiConfig) {
-    const configs = ['AGENTS.md', '.codex', '.claude', 'opencode.jsonc']
-    for (const item of configs) {
-      const src = join(deps.templatesRepoLocalDir, item)
-      if (await exists(src)) {
-        await copyIfMissing(src, join(flags.targetDir, item), true)
-      }
-    }
-  }
-
-  // 7. Copy example pipelines
-  const pipelinesSrc = join(deps.templatesRuneworkDir, 'pipelines')
-  if (await exists(pipelinesSrc)) {
-    await mkdir(join(runeworkDir, 'pipelines'), { recursive: true })
-    await cp(pipelinesSrc, join(runeworkDir, 'pipelines'), { recursive: true })
-  }
-
-  // 8. Update .gitignore
+  // 5. Update .gitignore.
   await ensureGitignoreEntries(flags.targetDir, [
     '.runework/node_modules',
     '.runework/.work',
   ])
 
-  // 9. Install dependencies
+  // 6. Install dependencies.
   if (!flags.noInstall) {
     console.error('runework: installing dependencies...')
     await $({ cwd: runeworkDir, quiet: false })`npm install`
   }
 
-  // 10. Summary
+  // 7. Summary.
   console.error('')
   console.error('runework: initialized .runework/ directory')
   console.error('')
   console.error('  .runework/')
   console.error('    package.json        deps (runework + zx)')
   console.error('    tsconfig.json       IDE support')
-  console.error('    scripts/            standalone scripts')
-  console.error('    pipelines/          modular AI workflows')
-  console.error('    prompts/            prompt templates')
+  console.error('    scripts/            user-authored scripts')
+  console.error('    pipelines/          user-authored durable pipelines')
   console.error('    .work/              all output (gitignored)')
   console.error('')
-  console.error('Run scripts (requires Node 24+):')
-  console.error('  cd .runework && npm run review')
-  console.error('  cd .runework && npm run explain -- src/main.rs')
+  console.error('Author your own scripts and pipelines inside .runework/.')
 
   return 0
 }

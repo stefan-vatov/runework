@@ -1,4 +1,4 @@
-import { listPipelines, runPipeline, PipelineRunError, createPipelineTui } from '@runework/pipelines'
+import { listPipelines, runPipeline, PipelineRunError } from '@runework/pipelines'
 import { resolveRuneworkDir } from './helpers.ts'
 
 function parseOptions(args: string[]): {
@@ -47,16 +47,24 @@ export async function pipelineCommand(argv: string[] = process.argv.slice(2)): P
   }
 
   const { pipelineOptions, resumeRunId } = parseOptions(rest)
-  const tui = createPipelineTui(pipelineName)
 
   try {
     const result = await runPipeline(pipelineName, runeworkDir, {
       options: pipelineOptions,
       resumeRunId,
-      log: (msg) => tui.log(msg),
-      onProgress: (event) => tui.applyProgress(event),
+      log: (message) => {
+        console.error(message)
+      },
     })
-    await tui.finish(result)
+    console.error(result.summary)
+    if (result.runId) {
+      console.error(`run: ${result.runId}`)
+    }
+    if (result.outputs) {
+      for (const [label, path] of Object.entries(result.outputs)) {
+        console.error(`${label}: ${path}`)
+      }
+    }
     return result.ok ? 0 : 1
   } catch (err) {
     const message = err instanceof PipelineRunError
@@ -64,7 +72,7 @@ export async function pipelineCommand(argv: string[] = process.argv.slice(2)): P
       : err instanceof Error
         ? err.message
         : String(err)
-    await tui.finish({ ok: false, summary: `Error: ${message}` })
+    console.error(`Error: ${message}`)
     return 1
   }
 }

@@ -13,7 +13,6 @@
   },
   "bin": {
     "runework-run": "bin/runework-run.js",
-    "runework-compare": "bin/runework-compare.js",
     "runework-detect": "bin/runework-detect.js",
     "runework-init": "bin/runework-init.js",
     "runework-pipeline": "bin/runework-pipeline.js"
@@ -34,11 +33,6 @@
       "types": "./dist/core/index.d.ts",
       "default": "./dist/core/index.js"
     },
-    "./workflows": {
-      "source": "./src/workflows/index.ts",
-      "types": "./dist/workflows/index.d.ts",
-      "default": "./dist/workflows/index.js"
-    },
     "./pipelines": {
       "source": "./src/pipelines/index.ts",
       "types": "./dist/pipelines/index.d.ts",
@@ -48,11 +42,6 @@
       "source": "./src/zx.ts",
       "types": "./dist/zx.d.ts",
       "default": "./dist/zx.js"
-    },
-    "./ink": {
-      "source": "./src/ink.ts",
-      "types": "./dist/ink.d.ts",
-      "default": "./dist/ink.js"
     }
   },
   "files": [
@@ -62,9 +51,7 @@
     "src/cli",
     "src/core",
     "src/pipelines",
-    "src/workflows",
     "src/index.ts",
-    "src/ink.ts",
     "src/models.ts",
     "src/zx.ts",
     "templates",
@@ -92,7 +79,6 @@
     "lint:all": "npx nx run-many -t lint --all",
     "build:all": "npx nx run-many -t build --all",
     "run": "node --conditions=source src/cli/run.ts",
-    "compare": "node --conditions=source src/cli/compare.ts",
     "detect": "node --conditions=source src/cli/detect.ts",
     "pipeline": "node --conditions=source src/cli/pipeline.ts"
   },
@@ -100,16 +86,11 @@
     "@runework/cli": "0.1.1",
     "@runework/core": "0.1.1",
     "@runework/pipelines": "0.1.1",
-    "@runework/workflows": "0.1.1",
-    "@types/react": "^19.2.14",
-    "ink": "^6.8.0",
-    "ink-spinner": "^5.0.0",
-    "react": "^19.2.4",
     "zx": "^8.0.0"
   },
   "bundleDependencies": [
+    "zx",
     "@runework/core",
-    "@runework/workflows",
     "@runework/pipelines",
     "@runework/cli"
   ],

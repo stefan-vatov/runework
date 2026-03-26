@@ -14,12 +14,6 @@ export function runResultExitCode(result: Pick<AgentRunResult, 'ok' | 'exitCode'
     : result.exitCode ?? 1
 }
 
-export function compareResultsExitCode(
-  results: Array<Pick<AgentRunResult, 'ok'>>,
-): number {
-  return results.every((result) => result.ok) ? 0 : 1
-}
-
 export function defaultRuneworkDependency(
   packageVersion: string,
   runeworkRoot: string,

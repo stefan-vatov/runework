@@ -83,7 +83,7 @@ export type PipelineContext = {
   addGitignoreEntries(entries: string[]): Promise<void>
   /** Report plain text progress. */
   log(message: string): void
-  /** Emit structured progress events — the TUI uses these for rich display. */
+  /** Emit structured progress events for consumer-owned UIs and reporters. */
   progress(event: PipelineProgressEvent): void
   /** Arbitrary options passed by the caller */
   options: Record<string, unknown>

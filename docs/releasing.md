@@ -16,7 +16,6 @@ The public root package and the private workspace packages participate in releas
 - Version sources:
   - root [`package.json`](../package.json)
   - [`packages/core/package.json`](../packages/core/package.json)
-  - [`packages/workflows/package.json`](../packages/workflows/package.json)
   - [`packages/pipelines/package.json`](../packages/pipelines/package.json)
   - [`packages/cli/package.json`](../packages/cli/package.json)
 - Git tag pattern: `v{version}`

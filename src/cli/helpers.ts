@@ -2,6 +2,5 @@
 export {
   resolveRuneworkDir,
   runResultExitCode,
-  compareResultsExitCode,
   defaultRuneworkDependency,
 } from '@runework/cli'
