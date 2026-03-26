@@ -8,8 +8,10 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
+const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+
 // Always build
-const build = spawnSync('node', ['scripts/build.mjs'], { stdio: 'inherit' })
+const build = spawnSync(process.execPath, ['scripts/build.mjs'], { stdio: 'inherit' })
 if (build.status !== 0) {
   process.exit(build.status ?? 1)
 }
@@ -21,7 +23,7 @@ const isCI = process.env.CI === 'true' || process.env.CI === '1'
 const isDryRun = process.env.npm_config_dry_run === 'true'
 
 if (isRepoInstall && !isCI && !isDryRun) {
-  const husky = spawnSync('npx', ['husky'], { stdio: 'inherit', shell: true })
+  const husky = spawnSync(npxCommand, ['husky'], { stdio: 'inherit' })
   if (husky.status !== 0) {
     console.error('[runework] warning: Husky hook installation failed (exit %d)', husky.status)
   }

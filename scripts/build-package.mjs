@@ -6,9 +6,12 @@
 import { chmodSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
 const args = process.argv.slice(2)
 const tsconfigPath = args[0]
+const scriptDir = dirname(fileURLToPath(import.meta.url))
+const tscEntrypoint = join(scriptDir, '..', 'node_modules', 'typescript', 'bin', 'tsc')
 
 if (!tsconfigPath) {
   console.error('Usage: node scripts/build-package.mjs <tsconfig.build.json> [--chmod <dir>]')
@@ -31,7 +34,7 @@ rmSync(distDir, { recursive: true, force: true })
 
 // Cleaning dist without forcing a rebuild can leave stale tsbuildinfo behind,
 // which makes `tsc -b` skip emit and produces empty publish artifacts.
-const tsc = spawnSync('tsc', ['-b', tsconfigPath, '--force'], { stdio: 'inherit', shell: true })
+const tsc = spawnSync(process.execPath, [tscEntrypoint, '-b', tsconfigPath, '--force'], { stdio: 'inherit' })
 if (tsc.status !== 0) {
   process.exit(tsc.status ?? 1)
 }
