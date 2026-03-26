@@ -1,5 +1,5 @@
-import { appendFile, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 import type {
@@ -162,6 +162,7 @@ export async function createPipelineWorkflowRuntime(
 
   async function writeOutput(filename: string, content: string): Promise<string> {
     const filePath = join(opts.outputDir, filename)
+    await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, content, 'utf8')
     state.outputs[filename] = filePath
     await persist()

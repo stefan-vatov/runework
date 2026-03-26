@@ -31,6 +31,20 @@ function extractSessionId(events: unknown[]): string | undefined {
   return undefined
 }
 
+function extractLastAgentMessage(events: unknown[]): string | undefined {
+  let last: string | undefined
+  for (const event of events) {
+    if (!event || typeof event !== 'object') continue
+    const rec = event as Record<string, unknown>
+    if (rec.type !== 'item.completed') continue
+    const item = rec.item as Record<string, unknown> | undefined
+    if (item?.type === 'agent_message' && typeof item.text === 'string') {
+      last = item.text
+    }
+  }
+  return last
+}
+
 export const CODEX_CAPABILITIES: AgentAdapterCapabilities = {
   approvalMode: false,
   files: false,
@@ -117,7 +131,7 @@ export class CodexAdapter implements AgentAdapter {
     try {
       const rawEvents = parseJsonLines(cli.stdout)
       const lastMessage = await readFile(outputFile, 'utf8').catch(() => '')
-      const text = (lastMessage || cli.stdout).trim()
+      const text = (lastMessage || extractLastAgentMessage(rawEvents) || cli.stdout).trim()
       const structured = request.schema ? safeJsonParse(text) : undefined
 
       return {

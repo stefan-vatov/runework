@@ -1,6 +1,6 @@
 # runework
 
-Purpose: thin zx toolkit for orchestrating `codex`, `claude`, and `opencode`.
+Purpose: thin zx toolkit for coding agents.
 
 Direction:
 - Keep this repo on primitives: adapters, execution, templating, journaling, reusable workflows, and generic pipeline runtime.
@@ -9,3 +9,5 @@ Direction:
 - Prefer structured outputs over prose when the provider supports them.
 - Route CLI execution through `src/core/run-cli.ts`; do not scatter zx shell policy.
 - Adapter changes are high-risk. Verify real argv behavior and keep tests for command construction.
+
+Read @CONSTITUTION.md and never stray from it in you decision making.

@@ -54,25 +54,7 @@ export async function pipelineCommand(argv: string[] = process.argv.slice(2)): P
       options: pipelineOptions,
       resumeRunId,
       log: (msg) => tui.log(msg),
-      onProgress: (event) => {
-        switch (event.type) {
-          case 'start-parallel':
-            tui.startReview(event.names)
-            break
-          case 'task-done':
-            tui.modelDone(event.name, event.elapsed, event.ok)
-            break
-          case 'task-error':
-            tui.modelError(event.name, event.elapsed, event.error)
-            break
-          case 'start-phase':
-            tui.startSynthesis()
-            break
-          case 'phase-done':
-            tui.synthesisDone(event.elapsed)
-            break
-        }
-      },
+      onProgress: (event) => tui.applyProgress(event),
     })
     await tui.finish(result)
     return result.ok ? 0 : 1

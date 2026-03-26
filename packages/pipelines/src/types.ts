@@ -1,11 +1,22 @@
 import type { AgentAdapter } from '@runework/core'
 
 export type PipelineProgressEvent =
+  // Legacy events (kept for backward compatibility with imperative pipelines)
   | { type: 'start-parallel'; names: string[] }
   | { type: 'task-done'; name: string; elapsed: string; ok: boolean }
   | { type: 'task-error'; name: string; elapsed: string; error: string }
   | { type: 'start-phase'; label: string }
   | { type: 'phase-done'; label: string; elapsed: string }
+  // Generic stage/job events (used by declarative stage pipelines)
+  // executionId is unique per execution (includes iteration), id is the logical stage/job id
+  | { type: 'stage-started'; executionId: string; id: string; label: string; iteration?: number; totalIterations?: number; parentExecutionId?: string }
+  | { type: 'stage-completed'; executionId: string; id: string; label: string; elapsed: string; iteration?: number; totalIterations?: number }
+  | { type: 'stage-failed'; executionId: string; id: string; label: string; elapsed: string; error: string; iteration?: number; totalIterations?: number; parentExecutionId?: string }
+  | { type: 'stage-skipped'; executionId: string; id: string; label: string; parentExecutionId?: string }
+  | { type: 'job-started'; executionId: string; id: string; stageExecutionId: string; label: string }
+  | { type: 'job-completed'; executionId: string; id: string; stageExecutionId: string; label: string; elapsed: string }
+  | { type: 'job-failed'; executionId: string; id: string; stageExecutionId: string; label: string; elapsed: string; error: string }
+  | { type: 'job-skipped'; executionId: string; id: string; stageExecutionId: string; label: string }
 
 export type WorkflowEvent =
   | { type: 'run-started'; pipelineName: string; runId: string; resumed: boolean; at: string; parentRunId?: string; version?: number }
@@ -98,3 +109,61 @@ export type PipelineSpawnResult = PipelineResult & {
 }
 
 export type PipelineFn = (ctx: PipelineContext) => Promise<PipelineResult>
+
+// ---------------------------------------------------------------------------
+// Declarative stage/job pipeline types
+// ---------------------------------------------------------------------------
+
+export type StageVariables = Record<string, unknown>
+
+/**
+ * Immutable variable snapshot for a single stage/job evaluation.
+ * The executor overlays `vars` onto the shared PipelineContext via Object.create()
+ * so stages keep the full context API without cloning every method onto a new object.
+ * Plain objects/arrays are deeply frozen, while Map/Set/Date values are exposed through
+ * read-only snapshots so parallel jobs cannot leak mutations through shared state.
+ */
+export type StageScopeContext<TVars extends StageVariables = StageVariables> = PipelineContext & {
+  readonly vars: Readonly<TVars>
+}
+
+export type StageJobContext<TVars extends StageVariables = StageVariables> = StageScopeContext<TVars> & {
+  readonly stageId: string
+  readonly stageExecutionId: string
+  readonly stageOutputDir: string
+  readonly jobId: string
+  readonly jobExecutionId: string
+  writeStageOutput(filename: string, content: string): Promise<string>
+}
+
+export type StageJobResult<TVars extends StageVariables = StageVariables> = {
+  vars?: Partial<TVars>
+}
+
+export type StageJobDefinition<TVars extends StageVariables = StageVariables> = {
+  id: string
+  label?: string
+  when?: (ctx: StageScopeContext<TVars>) => boolean | Promise<boolean>
+  run: (ctx: StageJobContext<TVars>) => Promise<StageJobResult<TVars> | void>
+}
+
+export type StageParallelGroupDefinition<TVars extends StageVariables = StageVariables> = {
+  parallel: StageJobDefinition<TVars>[]
+}
+
+export type StageDefinition<TVars extends StageVariables = StageVariables> = {
+  id: string
+  label?: string
+  when?: (ctx: StageScopeContext<TVars>) => boolean | Promise<boolean>
+  repeat?: {
+    count: number | ((ctx: StageScopeContext<TVars>) => number | Promise<number>)
+  }
+  steps: Array<StageJobDefinition<TVars> | StageParallelGroupDefinition<TVars> | StageDefinition<TVars>>
+}
+
+export type StagePipelineDefinition<TVars extends StageVariables = StageVariables> = {
+  version?: number
+  variables?: TVars | ((ctx: PipelineContext) => TVars | Promise<TVars>)
+  stages: StageDefinition<TVars>[]
+  result: (ctx: StageScopeContext<TVars>) => PipelineResult | Promise<PipelineResult>
+}
