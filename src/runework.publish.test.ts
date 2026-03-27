@@ -22,7 +22,7 @@ function runCommand(
   })
 }
 
-test('npm pack dry-run succeeds without publish-time manifest corrections', async (t) => {
+test('npm publish dry-run succeeds without publish-time manifest corrections', async (t) => {
   const repoRoot = resolve('.')
   const tmpRoot = await mkdtemp(resolve(tmpdir(), 'runework-publish-test-'))
   const npmCacheDir = resolve(tmpRoot, 'npm-cache')
@@ -30,26 +30,24 @@ test('npm pack dry-run succeeds without publish-time manifest corrections', asyn
     ...process.env,
     npm_config_cache: npmCacheDir,
   }
+
   await mkdir(npmCacheDir, { recursive: true })
   t.after(async () => {
     await rm(tmpRoot, { recursive: true, force: true })
   })
+
   const result = runCommand(
     npmCommand,
-    ['pack', '--dry-run', '--json'],
+    ['publish', '--dry-run', '--tag', 'next'],
     repoRoot,
     { env: npmEnv },
   )
 
-  const output = result.stdout || result.stderr || 'command failed without output'
+  const output = [result.stdout, result.stderr].filter(Boolean).join('\n')
   assert.equal(result.status, 0, output)
-  const packed = JSON.parse(result.stdout) as Array<{ filename?: string }>
-  assert.equal(Array.isArray(packed), true)
-  assert.equal(packed.length > 0, true)
-  assert.match(String(packed[0]?.filename), /\.tgz$/)
   assert.doesNotMatch(
-    result.stderr,
+    output,
     /npm warn publish\b/i,
-    `pack dry-run reported publish warnings:\n${result.stderr}`,
+    `publish dry-run reported publish warnings:\n${output}`,
   )
 })

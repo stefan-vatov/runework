@@ -1,36 +1,15 @@
 import { codex, detectTools } from 'runework'
+import { defineWorkflowPipeline } from 'runework/pipelines'
+import type { PipelineContext, PipelineResult } from 'runework/pipelines'
 import { $ } from 'runework/zx'
 import { readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
-import { defineStagePipeline } from './stage-compat.ts'
-import type { StageScopeContext, StageJobContext, StageJobResult } from './stage-compat.ts'
-
-// ===========================================================================
-// Model selection
-// ===========================================================================
-//
-// Default: Codex with GPT 5.4 at xhigh reasoning effort.
-// Codex is required because the alignment and commit passes need workspace-write.
-//
-// To use a different Codex model:
-//   const aligner = codex('o3-pro')
-//
-// For read-only experimentation (no fix/commit capability):
-//   import { claude, opencode } from 'runework'
-//   const reviewer = claude('claude-sonnet-4-6')
-//   const reviewer = opencode('zai/glm-5')
-//
-// Note: only Codex supports sandbox: 'workspace-write' in the current adapter
-// contract. Claude and OpenCode adapters cannot apply fixes or run git commits.
+import { join, resolve } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 
 const CODEX_MODEL = 'gpt-5.4'
 const CODEX_EXTRA_ARGS = ['--full-auto', '--config', 'model_reasoning_effort=xhigh']
 const ALIGNMENT_CYCLE_COUNT = 2
 const COMMIT_MAX_ATTEMPTS = 2
-
-// ===========================================================================
-// Typed pipeline variables
-// ===========================================================================
 
 type AlignmentConfig = {
   constitutionPath: string
@@ -52,73 +31,55 @@ type AlignmentRuntimeState = {
   skippedCommitCount: number
 }
 
-type AlignmentVars = AlignmentConfig & AlignmentRuntimeState
+type AlignmentStatePatch = Partial<AlignmentRuntimeState>
 
-// ===========================================================================
-// Pipeline composition
-// ===========================================================================
-//
-//  prepare
-//  └─ detect-tools         (ensure codex is available)
-//
-//  constitutional-cycle    (repeat = 2)
-//  ├─ align
-//  │  └─ review-and-fix    (codex gpt-5.4 xhigh, workspace-write)
-//  └─ commit
-//     └─ commit-changes    (git add -A, codex conventional commit, retry once)
-//
-//  Usage: runework-pipeline constitutional-alignment
+type AlignmentPhaseContext = {
+  readonly repoRoot: string
+  readonly config: Readonly<AlignmentConfig>
+  readonly state: Readonly<AlignmentRuntimeState>
+  readonly cycle: number
+  log(message: string): void
+  writeOutput(filename: string, content: string): Promise<string>
+  writePhaseOutput(filename: string, content: string): Promise<string>
+}
 
-const pipeline = defineStagePipeline<AlignmentVars>({
-  version: 1,
+const pipeline = defineWorkflowPipeline({
+  version: 2,
 
-  variables: async (ctx) => ({
-    ...await buildConfig(ctx.repoRoot),
-    ...buildInitialState(),
-  }),
+  async run(ctx) {
+    const config = await buildConfig(ctx.repoRoot)
+    await ensureStableConfig(ctx, 'config', config)
 
-  stages: [
-    // ── Stage 1: Prepare ────────────────────────────────────────────────
-    {
-      id: 'prepare',
-      label: 'Prepare',
-      steps: [
-        { id: 'detect-tools', label: 'Detect tools', run: detectAvailableToolsJob },
-      ],
-    },
+    let state = buildInitialState()
 
-    // ── Stage 2: Constitutional cycle (repeats 2 times) ─────────────────
-    {
-      id: 'constitutional-cycle',
-      label: 'Constitutional alignment cycle',
-      repeat: { count: ALIGNMENT_CYCLE_COUNT },
-      steps: [
-        {
-          id: 'align',
-          label: 'Align codebase to constitution',
-          steps: [
-            { id: 'review-and-fix', label: 'Review & fix deviations', run: reviewAndFix },
-          ],
-        },
-        {
-          id: 'commit',
-          label: 'Commit changes',
-          steps: [
-            { id: 'commit-changes', label: 'Stage & commit', run: commitChanges },
-          ],
-        },
-      ],
-    },
-  ],
+    state = applyStatePatch(
+      state,
+      await ctx.step('prepare:detect-tools', () =>
+        detectAvailableToolsJob(createAlignmentPhaseContext(ctx, config, state, 0, 'prepare')),
+      ),
+    )
 
-  result: buildResult,
+    for (let cycle = 1; cycle <= ALIGNMENT_CYCLE_COUNT; cycle += 1) {
+      state = applyStatePatch(
+        state,
+        await ctx.step(`cycle:${cycle}:align:review-and-fix`, () =>
+          reviewAndFix(createAlignmentPhaseContext(ctx, config, state, cycle, `cycle-${cycle}/align`)),
+        ),
+      )
+
+      state = applyStatePatch(
+        state,
+        await ctx.step(`cycle:${cycle}:commit:commit-changes`, () =>
+          commitChanges(createAlignmentPhaseContext(ctx, config, state, cycle, `cycle-${cycle}/commit`)),
+        ),
+      )
+    }
+
+    return buildResult(state)
+  },
 })
 
 export default pipeline
-
-// ===========================================================================
-// Config helpers
-// ===========================================================================
 
 async function buildConfig(repoRoot: string): Promise<AlignmentConfig> {
   const constitutionPath = resolve(repoRoot, 'CONSTITUTION.md')
@@ -129,12 +90,12 @@ async function buildConfig(repoRoot: string): Promise<AlignmentConfig> {
     throw new Error(`Constitution file not found at ${constitutionPath}`)
   }
 
-  const tools = (await detectTools())
-    .filter((t) => t.available)
-    .map((t) => t.name)
+  const availableTools = (await detectTools())
+    .filter((tool) => tool.available)
+    .map((tool) => tool.name)
     .sort()
 
-  return { constitutionPath, constitutionText, availableTools: tools }
+  return { constitutionPath, constitutionText, availableTools }
 }
 
 function buildInitialState(): AlignmentRuntimeState {
@@ -153,9 +114,63 @@ function buildInitialState(): AlignmentRuntimeState {
   }
 }
 
-// ===========================================================================
-// Prompts
-// ===========================================================================
+function createAlignmentPhaseContext(
+  ctx: PipelineContext,
+  config: AlignmentConfig,
+  state: AlignmentRuntimeState,
+  cycle: number,
+  phaseOutputDir: string,
+): AlignmentPhaseContext {
+  return {
+    repoRoot: ctx.repoRoot,
+    config,
+    state,
+    cycle,
+    log: ctx.log,
+    writeOutput: ctx.writeOutput,
+    writePhaseOutput(filename, content) {
+      return ctx.writeOutput(join(phaseOutputDir, filename), content)
+    },
+  }
+}
+
+function applyStatePatch(
+  state: AlignmentRuntimeState,
+  patch: AlignmentStatePatch | void,
+): AlignmentRuntimeState {
+  return patch ? { ...state, ...patch } : state
+}
+
+function listChangedKeys(
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>,
+): string[] {
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)])
+  return [...keys]
+    .filter((key) => !isDeepStrictEqual(previous[key], next[key]))
+    .sort()
+}
+
+async function ensureStableConfig(
+  ctx: PipelineContext,
+  checkpointId: string,
+  config: Record<string, unknown>,
+): Promise<void> {
+  const previous = await ctx.getCheckpoint<Record<string, unknown>>(checkpointId)
+  if (!previous) {
+    await ctx.checkpoint(checkpointId, config)
+    return
+  }
+
+  const changedKeys = listChangedKeys(previous, config)
+  if (changedKeys.length === 0) return
+
+  throw new Error(
+    `Cannot resume run ${ctx.runId}: configuration changed for ${changedKeys
+      .map((key) => JSON.stringify(key))
+      .join(', ')}`,
+  )
+}
 
 function buildAlignmentPrompt(constitutionText: string): string {
   return `You are a senior engineer performing a constitutional alignment review.
@@ -224,10 +239,6 @@ If any pre-commit hooks or checks fail, fix the issues first, restage with git a
 Do NOT push, tag, or create branches.`
 }
 
-// ===========================================================================
-// Git helpers
-// ===========================================================================
-
 async function gitStdout(
   repoRoot: string,
   args: string[],
@@ -276,12 +287,8 @@ function validateConventionalCommit(message: string): string | undefined {
   return undefined
 }
 
-// ===========================================================================
-// Job implementations
-// ===========================================================================
-
-async function detectAvailableToolsJob(ctx: StageJobContext<AlignmentVars>): Promise<StageJobResult<AlignmentVars>> {
-  const codexAvailable = ctx.vars.availableTools.includes('codex')
+async function detectAvailableToolsJob(ctx: AlignmentPhaseContext): Promise<AlignmentStatePatch> {
+  const codexAvailable = ctx.config.availableTools.includes('codex')
 
   if (!codexAvailable) {
     throw new Error(
@@ -290,23 +297,22 @@ async function detectAvailableToolsJob(ctx: StageJobContext<AlignmentVars>): Pro
     )
   }
 
-  ctx.log(`tools: ${ctx.vars.availableTools.join(', ')}`)
+  ctx.log(`tools: ${ctx.config.availableTools.join(', ')}`)
   ctx.log(`model: ${CODEX_MODEL} (xhigh reasoning)`)
-  ctx.log(`cycles: 2`)
+  ctx.log(`cycles: ${ALIGNMENT_CYCLE_COUNT}`)
 
-  // Log dirty status for visibility
   const status = await gitStdout(ctx.repoRoot, ['status', '--short'], 'Failed to get git status')
   if (status) {
     const fileCount = status.split('\n').filter(Boolean).length
     ctx.log(`working tree has ${fileCount} dirty file(s) — these will be included in commits`)
   }
 
-  return { vars: { codexAvailable } }
+  return { codexAvailable }
 }
 
-async function reviewAndFix(ctx: StageJobContext<AlignmentVars>): Promise<StageJobResult<AlignmentVars>> {
+async function reviewAndFix(ctx: AlignmentPhaseContext): Promise<AlignmentStatePatch> {
   const aligner = codex(CODEX_MODEL)
-  const prompt = buildAlignmentPrompt(ctx.vars.constitutionText)
+  const prompt = buildAlignmentPrompt(ctx.config.constitutionText)
 
   let text: string
   let ok: boolean
@@ -320,44 +326,38 @@ async function reviewAndFix(ctx: StageJobContext<AlignmentVars>): Promise<StageJ
     })
     text = result.text
     ok = result.ok
-  } catch (err) {
-    text = `[error] ${err instanceof Error ? err.message : String(err)}`
+  } catch (error) {
+    text = `[error] ${error instanceof Error ? error.message : String(error)}`
     ok = false
   }
 
-  await ctx.writeStageOutput('constitutional-alignment.md', text)
+  await ctx.writePhaseOutput('constitutional-alignment.md', text)
   const path = await ctx.writeOutput('constitutional-alignment.md', text)
 
-  const lines = text.split('\n').length
-  ctx.log(`alignment: ${ok ? 'done' : 'failed'} (${lines} lines) → ${path}`)
+  ctx.log(`alignment: ${ok ? 'done' : 'failed'} (${text.split('\n').length} lines) → ${path}`)
 
   if (!ok) throw new Error(`Alignment pass failed — see ${path}`)
 
   return {
-    vars: {
-      alignmentText: text,
-      alignmentPath: path,
-      alignmentOk: ok,
-    },
+    alignmentText: text,
+    alignmentPath: path,
+    alignmentOk: ok,
   }
 }
 
-async function commitChanges(ctx: StageJobContext<AlignmentVars>): Promise<StageJobResult<AlignmentVars>> {
-  // Stage everything
+async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentStatePatch> {
   await $({ cwd: ctx.repoRoot, quiet: true })`git add -A`
 
-  // Check if there's anything to commit
   if (!await hasStagedChanges(ctx.repoRoot)) {
-    const skipText = 'No staged changes after alignment — nothing to commit.'
-    await ctx.writeStageOutput('commit-result.md', skipText)
-    await ctx.writeOutput('commit-result.md', skipText)
+    const text = 'No staged changes after alignment — nothing to commit.'
+    await ctx.writePhaseOutput('commit-result.md', text)
+    const path = await ctx.writeOutput('commit-result.md', text)
     ctx.log('no changes to commit — skipping')
     return {
-      vars: {
-        commitOk: true,
-        commitSkipped: true,
-        skippedCommitCount: ctx.vars.skippedCommitCount + 1,
-      },
+      commitPath: path,
+      commitOk: true,
+      commitSkipped: true,
+      skippedCommitCount: ctx.state.skippedCommitCount + 1,
     }
   }
 
@@ -365,9 +365,8 @@ async function commitChanges(ctx: StageJobContext<AlignmentVars>): Promise<Stage
   let lastFailure: string | undefined
   let lastCreatedCommit = false
 
-  for (let attempt = 1; attempt <= COMMIT_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= COMMIT_MAX_ATTEMPTS; attempt += 1) {
     const headBefore = await getHead(ctx.repoRoot)
-
     const prompt = attempt === 1
       ? COMMIT_PROMPT
       : buildRetryCommitPrompt(lastFailure!, lastCreatedCommit)
@@ -384,14 +383,13 @@ async function commitChanges(ctx: StageJobContext<AlignmentVars>): Promise<Stage
       })
       text = result.text
       ok = result.ok
-    } catch (err) {
-      text = `[error] ${err instanceof Error ? err.message : String(err)}`
+    } catch (error) {
+      text = `[error] ${error instanceof Error ? error.message : String(error)}`
       ok = false
     }
 
-    await ctx.writeStageOutput(`commit-attempt-${attempt}.md`, text)
+    await ctx.writePhaseOutput(`commit-attempt-${attempt}.md`, text)
 
-    // Check if a commit was actually created
     const headAfter = await getHead(ctx.repoRoot)
     const commitCreated = Boolean(headAfter && headBefore !== headAfter)
 
@@ -400,24 +398,20 @@ async function commitChanges(ctx: StageJobContext<AlignmentVars>): Promise<Stage
       const validationError = validateConventionalCommit(message)
 
       if (!validationError) {
-        // Success
         const resultText = `Commit created (attempt ${attempt}):\n${message.trim()}`
-        await ctx.writeStageOutput('commit-result.md', resultText)
+        await ctx.writePhaseOutput('commit-result.md', resultText)
         const path = await ctx.writeOutput('commit-result.md', resultText)
         ctx.log(`committed: ${message.trim()} → ${path}`)
         return {
-          vars: {
-            commitText: text,
-            commitPath: path,
-            commitOk: true,
-            commitSkipped: false,
-            commitMessage: message.trim(),
-            commitCount: ctx.vars.commitCount + 1,
-          },
+          commitText: text,
+          commitPath: path,
+          commitOk: true,
+          commitSkipped: false,
+          commitMessage: message.trim(),
+          commitCount: ctx.state.commitCount + 1,
         }
       }
 
-      // Commit exists but message is bad — retry will amend
       lastFailure = `commit message validation failed: ${validationError}`
       lastCreatedCommit = true
     } else {
@@ -426,7 +420,6 @@ async function commitChanges(ctx: StageJobContext<AlignmentVars>): Promise<Stage
         : `model failed (attempt ${attempt}): see transcript`
       lastCreatedCommit = false
 
-      // Restage for retry — model may have changed files trying to fix hooks
       if (attempt < COMMIT_MAX_ATTEMPTS) {
         await $({ cwd: ctx.repoRoot, quiet: true })`git add -A`
       }
@@ -437,29 +430,20 @@ async function commitChanges(ctx: StageJobContext<AlignmentVars>): Promise<Stage
     }
   }
 
-  // Exhausted attempts
   const failText = `Commit failed after ${COMMIT_MAX_ATTEMPTS} attempts.\nLast failure: ${lastFailure}`
-  await ctx.writeStageOutput('commit-result.md', failText)
+  await ctx.writePhaseOutput('commit-result.md', failText)
   const failPath = await ctx.writeOutput('commit-result.md', failText)
   throw new Error(`Commit failed after ${COMMIT_MAX_ATTEMPTS} attempts: ${lastFailure} — see ${failPath}`)
 }
 
-// ===========================================================================
-// Result builder
-// ===========================================================================
-
-function buildResult(ctx: StageScopeContext<AlignmentVars>) {
-  const totalCycles = ALIGNMENT_CYCLE_COUNT
-  const commits = ctx.vars.commitCount
-  const skipped = ctx.vars.skippedCommitCount
-
-  const parts = [`${totalCycles} cycles`]
-  if (commits > 0) parts.push(`${commits} commit${commits !== 1 ? 's' : ''}`)
-  if (skipped > 0) parts.push(`${skipped} no-op${skipped !== 1 ? 's' : ''}`)
+function buildResult(state: Readonly<AlignmentRuntimeState>): PipelineResult {
+  const parts = [`${ALIGNMENT_CYCLE_COUNT} cycles`]
+  if (state.commitCount > 0) parts.push(`${state.commitCount} commit${state.commitCount !== 1 ? 's' : ''}`)
+  if (state.skippedCommitCount > 0) parts.push(`${state.skippedCommitCount} no-op${state.skippedCommitCount !== 1 ? 's' : ''}`)
 
   return {
-    ok: ctx.vars.alignmentOk && ctx.vars.commitOk,
-    outputPath: ctx.vars.commitPath || ctx.vars.alignmentPath,
+    ok: state.alignmentOk && state.commitOk,
+    outputPath: state.commitPath || state.alignmentPath,
     summary: `Constitutional alignment complete (${parts.join(', ')})`,
   }
 }
