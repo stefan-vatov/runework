@@ -187,13 +187,33 @@ Your task:
 3. Identify any deviations — places where the implementation contradicts, ignores, or undermines a constitutional principle.
 4. Fix every deviation you find directly in the codebase.
 
+Decision policy:
+- Prefer changing implementation to satisfy the constitution over deleting validation that exposes the problem.
+- Treat tests, typechecks, publish checks, smoke tests, and dogfood pipelines as contract evidence, not disposable cleanup targets.
+- If a repo-local workflow is too opinionated or uses the wrong abstraction, rewrite it onto runework primitives instead of removing the coverage it provides.
+- Keep the runtime on primitives, but do not achieve that by weakening verification of existing behavior.
+
 Rules:
 - Do NOT edit files under .runework/.work/ or any generated pipeline artifacts.
 - Do NOT add features, abstractions, or code beyond what is needed to resolve deviations.
+- Do NOT delete, narrow, bypass, or weaken tests/checks just to make the repo appear constitutionally aligned.
+- Do NOT change tests merely to match a regression or newly introduced behavior.
+- Only remove or substantially rewrite validation when the underlying contract is intentionally removed, and in the same change add equivalent or stronger replacement coverage.
+- If a deviation can be fixed either by changing implementation or by loosening validation, choose the implementation change.
+- If you are unsure whether a test or dogfood workflow is guarding an intentional contract, stop and leave it in place.
 - Stay idiomatic to the existing codebase style.
 - If a deviation is ambiguous, favor the constitutional principle over current implementation.
 
-After making changes, write a brief summary of what you changed and which constitutional principle each change serves.`
+Execution sequence:
+1. Identify the principle being violated and the concrete files involved.
+2. Preserve or strengthen the relevant validation before considering any cleanup.
+3. Make the minimal implementation changes needed to satisfy the constitution.
+4. Run relevant checks so the repo remains green without removing safeguards.
+
+After making changes, write a brief summary that names:
+- which constitutional principle each change serves
+- which tests/checks/validation were preserved or strengthened
+- any validation you intentionally replaced, and what replaced it`
 }
 
 const COMMIT_PROMPT = `You are a developer committing code changes.
