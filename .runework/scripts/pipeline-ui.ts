@@ -1,5 +1,5 @@
-import { createElement, useEffect, useReducer } from 'react'
-import { Box, Text, render, useApp, useStdout } from 'ink'
+import { createElement, useEffect, useReducer, useRef, useState } from 'react'
+import { Box, Text, render, useApp, useInput, useStdin, useStdout } from 'ink'
 import { runPipeline, type PipelineResult } from 'runework/pipelines'
 import type {
   DogfoodJobProgressEvent,
@@ -59,6 +59,8 @@ const MAX_OUTPUT_LINES = 200
 const h = createElement
 const MIN_STREAM_HEIGHT = 10
 const RESERVED_SCREEN_LINES = 8
+const ENABLE_MOUSE_SCROLL = '\u001B[?1000h\u001B[?1006h'
+const DISABLE_MOUSE_SCROLL = '\u001B[?1000l\u001B[?1006l'
 
 function humanizePipelineName(name: string): string {
   return name
@@ -239,23 +241,69 @@ function wrapOutputLine(
   })
 }
 
+function clampScrollOffset(
+  scrollOffset: number,
+  totalLines: number,
+  height: number,
+): number {
+  return Math.min(
+    Math.max(0, scrollOffset),
+    Math.max(0, totalLines - height),
+  )
+}
+
+function buildWrappedViewportLines(
+  lines: PipelineOutputLine[],
+  width: number,
+): PipelineViewportLine[] {
+  return collapseRepeatedOutputLines(lines)
+    .flatMap((line) => wrapOutputLine(line, Math.max(1, width)))
+}
+
+export function extractMouseWheelDelta(input: string): number {
+  let delta = 0
+
+  for (const match of input.matchAll(/\u001B\[<(\d+);\d+;\d+[mM]/g)) {
+    const button = Number(match[1])
+    if ((button & 64) !== 64) continue
+
+    const wheelButton = button & 0b11
+    if (wheelButton === 0) {
+      delta += 1
+      continue
+    }
+
+    if (wheelButton === 1) {
+      delta -= 1
+    }
+  }
+
+  return delta
+}
+
 export function buildStreamViewportLines(
   lines: PipelineOutputLine[],
   width: number,
   height: number,
+  scrollOffset = 0,
 ): PipelineViewportLine[] {
-  const wrapped = collapseRepeatedOutputLines(lines)
-    .flatMap((line) => wrapOutputLine(line, Math.max(1, width)))
+  const wrapped = buildWrappedViewportLines(lines, width)
 
   if (height <= 0) return []
-  if (wrapped.length >= height) return wrapped.slice(-height)
+
+  const clampedScrollOffset = clampScrollOffset(scrollOffset, wrapped.length, height)
+  const endIndex = wrapped.length - clampedScrollOffset
+  const startIndex = Math.max(0, endIndex - height)
+  const visibleLines = wrapped.slice(startIndex, endIndex)
+
+  if (visibleLines.length >= height) return visibleLines
 
   return [
-    ...Array.from({ length: height - wrapped.length }, () => ({
+    ...Array.from({ length: height - visibleLines.length }, () => ({
       stream: 'stdout' as const,
       text: '',
     })),
-    ...wrapped,
+    ...visibleLines,
   ]
 }
 
@@ -409,8 +457,9 @@ function renderStreamBox(
   job: PipelineJobState | undefined,
   width: number,
   height: number,
+  scrollOffset: number,
 ) {
-  const lines = buildStreamViewportLines(job?.output ?? [], width, height)
+  const lines = buildStreamViewportLines(job?.output ?? [], width, height, scrollOffset)
   const borderColor = job?.status === 'failed' ? 'red' : 'cyan'
 
   return h(
@@ -479,8 +528,11 @@ function formatPlainOutputEvent(
 
 function PipelineApp(props: RunDogfoodPipelineOptions) {
   const { exit } = useApp()
-  const { stdout } = useStdout()
+  const { stdin, internal_eventEmitter } = useStdin()
+  const { stdout, write } = useStdout()
   const [state, dispatch] = useReducer(uiReducer, createInitialState(props.pipelineName))
+  const [streamScrollOffset, setStreamScrollOffset] = useState(0)
+  const previousPrimaryJobIdRef = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     let active = true
@@ -541,6 +593,94 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
     MIN_STREAM_HEIGHT,
     rows - RESERVED_SCREEN_LINES,
   )
+  const wrappedOutputLines = buildWrappedViewportLines(primaryJob?.output ?? [], contentWidth)
+  const maxStreamScrollOffset = Math.max(0, wrappedOutputLines.length - streamHeight)
+
+  useEffect(() => {
+    if (previousPrimaryJobIdRef.current === primaryJob?.id) return
+
+    previousPrimaryJobIdRef.current = primaryJob?.id
+    setStreamScrollOffset(0)
+  }, [primaryJob?.id])
+
+  useEffect(() => {
+    setStreamScrollOffset((current) =>
+      clampScrollOffset(current, wrappedOutputLines.length, streamHeight))
+  }, [streamHeight, wrappedOutputLines.length])
+
+  useEffect(() => {
+    if (!stdout.isTTY || !stdin.isTTY) return
+
+    write(ENABLE_MOUSE_SCROLL)
+    return () => {
+      write(DISABLE_MOUSE_SCROLL)
+    }
+  }, [stdin.isTTY, stdout.isTTY, write])
+
+  useEffect(() => {
+    const handleInput = (data: string) => {
+      const delta = extractMouseWheelDelta(data)
+      if (delta === 0) return
+
+      setStreamScrollOffset((current) =>
+        clampScrollOffset(
+          current + delta,
+          wrappedOutputLines.length,
+          streamHeight,
+        ))
+    }
+
+    internal_eventEmitter?.on('input', handleInput)
+    return () => {
+      internal_eventEmitter?.removeListener('input', handleInput)
+    }
+  }, [internal_eventEmitter, streamHeight, wrappedOutputLines.length])
+
+  useInput((_input, key) => {
+    if (maxStreamScrollOffset === 0) return
+
+    if (key.upArrow) {
+      setStreamScrollOffset((current) =>
+        clampScrollOffset(current + 1, wrappedOutputLines.length, streamHeight))
+      return
+    }
+
+    if (key.downArrow) {
+      setStreamScrollOffset((current) =>
+        clampScrollOffset(current - 1, wrappedOutputLines.length, streamHeight))
+      return
+    }
+
+    if (key.pageUp) {
+      setStreamScrollOffset((current) =>
+        clampScrollOffset(
+          current + Math.max(1, streamHeight - 1),
+          wrappedOutputLines.length,
+          streamHeight,
+        ))
+      return
+    }
+
+    if (key.pageDown) {
+      setStreamScrollOffset((current) =>
+        clampScrollOffset(
+          current - Math.max(1, streamHeight - 1),
+          wrappedOutputLines.length,
+          streamHeight,
+        ))
+      return
+    }
+
+    if (key.home) {
+      setStreamScrollOffset(maxStreamScrollOffset)
+      return
+    }
+
+    if (key.end) {
+      setStreamScrollOffset(0)
+    }
+  })
+
   const headerStatus = state.error
     ? h(Text, { color: 'red', bold: true }, 'failed')
     : state.result
@@ -565,7 +705,7 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
       wrapText(state.subtitle ?? ' ', Math.max(1, columns))[0] ?? ' ',
     ),
     renderActiveJob(primaryJob, contentWidth),
-    renderStreamBox(primaryJob, contentWidth, streamHeight),
+    renderStreamBox(primaryJob, contentWidth, streamHeight, streamScrollOffset),
     state.result
       ? h(
         Box,

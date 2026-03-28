@@ -208,6 +208,40 @@ test('stream viewport wraps commentary and collapses repeated stderr noise', asy
   ])
 })
 
+test('stream viewport supports scrolling back through prior output', async () => {
+  const { buildStreamViewportLines } = await import('../.runework/scripts/pipeline-ui.ts')
+
+  const lines = buildStreamViewportLines(
+    [
+      { stream: 'stdout', text: 'alpha' },
+      { stream: 'stdout', text: 'beta' },
+      { stream: 'stdout', text: 'gamma' },
+      { stream: 'stdout', text: 'delta' },
+    ],
+    24,
+    2,
+    1,
+  ).map((line) => line.text)
+
+  assert.deepEqual(lines, [
+    '› beta',
+    '› gamma',
+  ])
+})
+
+test('mouse wheel parser converts sgr mouse scroll sequences into viewport deltas', async () => {
+  const { extractMouseWheelDelta } = await import('../.runework/scripts/pipeline-ui.ts')
+
+  assert.equal(
+    extractMouseWheelDelta('\u001B[<64;30;12M\u001B[<65;30;12M\u001B[<64;30;12M'),
+    1,
+  )
+  assert.equal(
+    extractMouseWheelDelta('\u001B[<0;30;12M'),
+    0,
+  )
+})
+
 test('repo-local pipeline script uses source exports during development', async () => {
   const packageJson = JSON.parse(
     await readFile(new URL('../package.json', import.meta.url), 'utf8'),
