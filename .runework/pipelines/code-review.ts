@@ -1,5 +1,4 @@
-import { codex, claude, detectTools, opencode } from 'runework'
-import type { AgentAdapter } from 'runework'
+import { detectTools } from 'runework'
 import { defineWorkflowPipeline } from 'runework/pipelines'
 import type { PipelineContext, PipelineResult } from 'runework/pipelines'
 import { $ } from 'runework/zx'
@@ -12,14 +11,16 @@ import {
   type DogfoodJobDescriptor,
 } from '../scripts/pipeline-ui-contract.ts'
 
-type ReviewerInfo = { name: string; model?: string }
+type ReviewerName = 'claude' | 'codex' | 'opencode'
+
+type ReviewerInfo = { name: ReviewerName; model?: string }
 
 type ReviewConfig = {
   scope: string
   cycles: number
   fix: boolean
   opencodeModel: string
-  availableTools: string[]
+  availableTools: ReviewerName[]
 }
 
 type ReviewRuntimeState = {
@@ -53,6 +54,7 @@ type ReviewPhaseContext = {
   readonly config: Readonly<ReviewConfig>
   readonly state: Readonly<ReviewRuntimeState>
   readonly cycle: number
+  readonly adapters: PipelineContext['adapters']
   log(message: string): void
   progress: PipelineContext['progress']
   writeOutput(filename: string, content: string): Promise<string>
@@ -188,10 +190,11 @@ function parseFixOption(raw: unknown): boolean {
   throw new Error(`--fix must be a boolean-like value, got ${formatOptionValue(raw)}`)
 }
 
-async function detectAvailableToolNames(): Promise<string[]> {
+async function detectAvailableToolNames(): Promise<ReviewerName[]> {
   return (await detectTools())
     .filter((tool) => tool.available)
     .map((tool) => tool.name)
+    .filter(isReviewerName)
     .sort()
 }
 
@@ -243,6 +246,7 @@ function createReviewPhaseContext(
     config,
     state,
     cycle,
+    adapters: ctx.adapters,
     log: ctx.log,
     progress: ctx.progress,
     writeOutput: ctx.writeOutput,
@@ -316,6 +320,14 @@ function applyStatePatch(
   patch: ReviewStatePatch | void,
 ): ReviewRuntimeState {
   return patch ? { ...state, ...patch } : state
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+function isReviewerName(name: string): name is ReviewerName {
+  return name === 'claude' || name === 'codex' || name === 'opencode'
 }
 
 function listChangedKeys(
@@ -561,17 +573,15 @@ function buildFixReview(review: string): BuiltFixReview {
   }
 }
 
-function makeAdapter(name: string, opencodeModel: string): AgentAdapter {
-  switch (name) {
-    case 'codex':
-      return codex()
-    case 'claude':
-      return claude()
-    case 'opencode':
-      return opencode(opencodeModel)
-    default:
-      throw new Error(`Unknown reviewer: ${name}`)
+function getReviewAdapter(
+  ctx: ReviewPhaseContext,
+  name: ReviewerName,
+): PipelineContext['adapters'][string] {
+  const adapter = ctx.adapters[name]
+  if (!adapter) {
+    throw new Error(`Unknown reviewer: ${name}`)
   }
+  return adapter
 }
 
 function isRuneworkArtifactPath(path: string): boolean {
@@ -724,7 +734,7 @@ function makeReviewJob(adapterName: 'claude' | 'codex' | 'opencode') {
     const job = buildReviewJobDescriptor(ctx.cycle, adapterName)
     emitDogfoodJob(ctx, job, 'running', `launching ${adapterName}`)
 
-    const adapter = makeAdapter(adapterName, ctx.config.opencodeModel)
+    const adapter = getReviewAdapter(ctx, adapterName)
     const prompt = REVIEW_PROMPT + ctx.state.currentDiff
     const streamReporter = createAgentStreamReporter(ctx, job)
 
@@ -734,12 +744,14 @@ function makeReviewJob(adapterName: 'claude' | 'codex' | 'opencode') {
       const result = await adapter.run({
         prompt,
         cwd: ctx.repoRoot,
+        model: adapterName === 'opencode' ? ctx.config.opencodeModel : undefined,
         timeoutMs: 30 * 60 * 1000,
         onOutputChunk: streamReporter.onOutputChunk,
       })
       text = result.text
       ok = result.ok
     } catch (error) {
+      if (isAbortError(error)) throw error
       text = `[error] ${error instanceof Error ? error.message : String(error)}`
       ok = false
     } finally {
@@ -830,17 +842,19 @@ async function synthesize(ctx: ReviewPhaseContext): Promise<ReviewStatePatch> {
 
   const job = buildSynthesisJobDescriptor(ctx.cycle, synthesizerName)
   emitDogfoodJob(ctx, job, 'running', `${reviews.length} reviews`)
-  const synthesizer = makeAdapter(synthesizerName, ctx.config.opencodeModel)
+  const synthesizer = getReviewAdapter(ctx, synthesizerName)
   const streamReporter = createAgentStreamReporter(ctx, job)
   let result
   try {
     result = await synthesizer.run({
       prompt: SYNTHESIS_PROMPT + reviewBlock,
       cwd: ctx.repoRoot,
+      model: synthesizerName === 'opencode' ? ctx.config.opencodeModel : undefined,
       timeoutMs: 30 * 60 * 1000,
       onOutputChunk: streamReporter.onOutputChunk,
     })
   } catch (error) {
+    if (isAbortError(error)) throw error
     emitDogfoodJob(
       ctx,
       job,
@@ -894,7 +908,7 @@ async function applyFixes(ctx: ReviewPhaseContext): Promise<ReviewStatePatch> {
           : 'No Must Fix/Should Fix items. Skipping writable fix run.'
         ok = true
       } else {
-        const fixer = codex('gpt-5.4')
+        const fixer = ctx.adapters.codex
         fixRan = true
         const streamReporter = createAgentStreamReporter(ctx, job)
         let result
@@ -902,6 +916,7 @@ async function applyFixes(ctx: ReviewPhaseContext): Promise<ReviewStatePatch> {
           result = await fixer.run({
             prompt: FIX_PROMPT + fixReview.text,
             cwd: ctx.repoRoot,
+            model: 'gpt-5.4',
             sandbox: 'workspace-write',
             extraArgs: ['--full-auto', '--config', 'model_reasoning_effort=xhigh'],
             timeoutMs: 60 * 60 * 1000,
@@ -915,6 +930,7 @@ async function applyFixes(ctx: ReviewPhaseContext): Promise<ReviewStatePatch> {
       }
     }
   } catch (error) {
+    if (isAbortError(error)) throw error
     text = `[error] ${error instanceof Error ? error.message : String(error)}`
     ok = false
   }

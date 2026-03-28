@@ -281,6 +281,32 @@ test('repo-local pipeline script uses source exports during development', async 
   )
 })
 
+test('code-review dogfood pipeline uses pipeline-managed adapters', async () => {
+  const source = await readFile(
+    new URL('../.runework/pipelines/code-review.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.doesNotMatch(
+    source,
+    /import\s*{\s*[^}]*\b(?:codex|claude|opencode)\b[^}]*}\s*from 'runework'/,
+  )
+  assert.match(source, /ctx\.adapters\[name\]/)
+  assert.match(source, /ctx\.adapters\.codex/)
+})
+
+test('code-review dogfood pipeline preserves AbortError from adapter-backed phases', async () => {
+  const source = await readFile(
+    new URL('../.runework/pipelines/code-review.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /function isAbortError\(error: unknown\)/)
+  assert.ok(
+    (source.match(/if \(isAbortError\(error\)\) throw error/g) ?? []).length >= 3,
+  )
+})
+
 test('constitutional alignment dogfood pipeline uses pipeline-managed adapters', async () => {
   const source = await readFile(
     new URL('../.runework/pipelines/constitutional-alignment.ts', import.meta.url),

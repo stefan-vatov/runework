@@ -681,6 +681,55 @@ test('code-review treats 0 and empty string fix options as disabled', async (t) 
   }
 })
 
+test('code-review abort signal stops reviewer runs promptly', async (t) => {
+  const { runPipeline } = await import('./pipelines/index.ts')
+  const { runeworkDir } = await createDogfoodRepo(t)
+  const fakeCodex = await createFakeCodexCli(t)
+
+  withFakeCodexEnv(t, {
+    binDir: fakeCodex.binDir,
+    logPath: fakeCodex.logPath,
+    reviewText: [
+      '## Must Fix',
+      '- None',
+      '',
+      '## Should Fix',
+      '- None',
+      '',
+      '## Consider',
+      '- None',
+      '',
+      '## Summary',
+      '- Codex review finished.',
+      '',
+    ].join('\n'),
+    delayMs: '1000',
+  })
+
+  const controller = new AbortController()
+  const startedAt = Date.now()
+  const runPromise = runPipeline('code-review', runeworkDir, {
+    options: { cycles: 1 },
+    log: () => {},
+    signal: controller.signal,
+  })
+
+  const abortTimer = setTimeout(() => {
+    controller.abort()
+  }, 25)
+
+  await assert.rejects(
+    () => runPromise,
+    (error: unknown) => error instanceof Error && error.name === 'AbortError',
+  )
+  clearTimeout(abortTimer)
+
+  assert.ok(
+    Date.now() - startedAt < 700,
+    `expected code-review to abort promptly, took ${Date.now() - startedAt}ms`,
+  )
+})
+
 test('code-review emits progress events and starts reviewer jobs before any reviewer completes', async (t) => {
   const { runPipeline } = await import('./pipelines/index.ts')
   const { repoRoot, runeworkDir } = await createDogfoodRepo(t)
