@@ -14,6 +14,9 @@ import {
 
 const CODEX_MODEL = 'gpt-5.4'
 const CODEX_EXTRA_ARGS = ['--full-auto', '--config', 'model_reasoning_effort=xhigh']
+const ALIGNMENT_SANDBOX = 'workspace-write'
+const COMMIT_SANDBOX = 'danger-full-access'
+const COMMIT_APPROVAL_MODE = 'never'
 const ALIGNMENT_CYCLE_COUNT = 2
 const COMMIT_MAX_ATTEMPTS = 2
 
@@ -394,7 +397,7 @@ async function detectAvailableToolsJob(ctx: AlignmentPhaseContext): Promise<Alig
   if (!codexAvailable) {
     emitDogfoodJob(ctx, job, 'failed', 'codex unavailable')
     throw new Error(
-      'constitutional-alignment requires Codex CLI because fix and commit passes need workspace-write access. ' +
+      'constitutional-alignment requires Codex CLI because alignment needs writable workspace access and commit retries need full git metadata access. ' +
       'Install codex and try again.',
     )
   }
@@ -427,7 +430,7 @@ async function reviewAndFix(ctx: AlignmentPhaseContext): Promise<AlignmentStateP
       prompt,
       cwd: ctx.repoRoot,
       model: CODEX_MODEL,
-      sandbox: 'workspace-write',
+      sandbox: ALIGNMENT_SANDBOX,
       extraArgs: CODEX_EXTRA_ARGS,
       timeoutMs: 60 * 60 * 1000,
       onOutputChunk: streamReporter.onOutputChunk,
@@ -507,7 +510,8 @@ async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentState
         prompt,
         cwd: ctx.repoRoot,
         model: CODEX_MODEL,
-        sandbox: 'workspace-write',
+        sandbox: COMMIT_SANDBOX,
+        approvalMode: COMMIT_APPROVAL_MODE,
         extraArgs: CODEX_EXTRA_ARGS,
         timeoutMs: 30 * 60 * 1000,
         onOutputChunk: streamReporter.onOutputChunk,

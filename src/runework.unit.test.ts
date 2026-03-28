@@ -330,6 +330,20 @@ test('constitutional alignment dogfood pipeline preserves AbortError from codex 
   )
 })
 
+test('constitutional alignment keeps review constrained and elevates only commit retries', async () => {
+  const source = await readFile(
+    new URL('../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /const ALIGNMENT_SANDBOX = 'workspace-write'/)
+  assert.match(source, /const COMMIT_SANDBOX = 'danger-full-access'/)
+  assert.match(source, /const COMMIT_APPROVAL_MODE = 'never'/)
+  assert.match(source, /sandbox: ALIGNMENT_SANDBOX/)
+  assert.match(source, /sandbox: COMMIT_SANDBOX/)
+  assert.match(source, /approvalMode: COMMIT_APPROVAL_MODE/)
+})
+
 test('constitutional alignment prompt treats committed .runework as the sanctioned dogfood boundary', async () => {
   const source = await readFile(
     new URL('../.runework/pipelines/constitutional-alignment.ts', import.meta.url),

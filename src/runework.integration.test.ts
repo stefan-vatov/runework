@@ -1483,6 +1483,21 @@ test('constitutional-alignment rolls back an invalid commit when retries fail', 
     /Commit failed after 2 attempts/,
   )
 
+  const execInvocations = (await readFakeCliInvocations(fakeCodex.logPath))
+    .filter((entry) => entry.args.includes('exec'))
+  const alignmentInvocation = execInvocations.find((entry) =>
+    entry.stdin.includes('You are a senior engineer performing a constitutional alignment review.'))
+  assert.ok(alignmentInvocation)
+  assert.ok(alignmentInvocation.args.includes('workspace-write'))
+  assert.ok(!alignmentInvocation.args.includes('danger-full-access'))
+
+  const commitInvocations = execInvocations.filter((entry) =>
+    entry.stdin.includes('You are a developer committing code changes.')
+    || entry.stdin.includes('You are a developer fixing a failed commit attempt.'))
+  assert.equal(commitInvocations.length, 2)
+  assert.ok(commitInvocations.every((entry) => entry.args.includes('danger-full-access')))
+  assert.ok(commitInvocations.every((entry) => entry.args.includes('-a') && entry.args.includes('never')))
+
   assert.equal(runCommand('git', ['rev-parse', 'HEAD'], repoRoot).stdout.trim(), initialHead)
   assert.equal(
     await readFile(join(repoRoot, 'README.md'), 'utf8'),
