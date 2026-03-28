@@ -1,62 +1,12 @@
 {
-  "name": "runework",
-  "private": false,
+  "name": "runework-workspace",
+  "private": true,
   "version": "0.1.1",
   "type": "module",
   "license": "MIT",
-  "description": "thin zx runtime for durable AI CLI workflows across providers",
+  "description": "workspace root for the runework monorepo",
   "workspaces": [
     "packages/*"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "bin": {
-    "runework-run": "bin/runework-run.js",
-    "runework-detect": "bin/runework-detect.js",
-    "runework-init": "bin/runework-init.js",
-    "runework-pipeline": "bin/runework-pipeline.js"
-  },
-  "exports": {
-    ".": {
-      "source": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./adapters": {
-      "source": "./src/adapters/index.ts",
-      "types": "./dist/adapters/index.d.ts",
-      "default": "./dist/adapters/index.js"
-    },
-    "./core": {
-      "source": "./src/core/index.ts",
-      "types": "./dist/core/index.d.ts",
-      "default": "./dist/core/index.js"
-    },
-    "./pipelines": {
-      "source": "./src/pipelines/index.ts",
-      "types": "./dist/pipelines/index.d.ts",
-      "default": "./dist/pipelines/index.js"
-    },
-    "./zx": {
-      "source": "./src/zx.ts",
-      "types": "./dist/zx.d.ts",
-      "default": "./dist/zx.js"
-    }
-  },
-  "files": [
-    "bin",
-    "dist",
-    "src/adapters",
-    "src/cli",
-    "src/core",
-    "src/pipelines",
-    "src/index.ts",
-    "src/models.ts",
-    "src/zx.ts",
-    "templates",
-    "README.md",
-    "LICENSE"
   ],
   "engines": {
     "node": ">=24"
@@ -71,29 +21,17 @@
     "release:patch": "npx nx release patch --skip-publish",
     "release:publish": "npx nx release publish",
     "test": "npm run test:unit && npm run test:integration && npm run test:publish",
-    "test:unit": "node --conditions=source --test \"packages/*/src/*.unit.test.ts\" \"src/*.unit.test.ts\"",
-    "test:integration": "node --conditions=source --test \"packages/*/src/*.integration.test.ts\" \"src/*.integration.test.ts\"",
-    "test:publish": "node --conditions=source --test \"src/*.publish.test.ts\"",
+    "test:unit": "node --conditions=source --test \"packages/*/src/*.unit.test.ts\"",
+    "test:integration": "node --conditions=source --test \"packages/*/src/*.integration.test.ts\"",
+    "test:publish": "node --conditions=source --test \"packages/*/src/*.publish.test.ts\"",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "lint:all": "npm run lint",
     "build:all": "node scripts/build.mjs",
-    "run": "node --conditions=source src/cli/run.ts",
-    "detect": "node --conditions=source src/cli/detect.ts",
+    "run": "node --conditions=source packages/runework/src/cli/run.ts",
+    "detect": "node --conditions=source packages/runework/src/cli/detect.ts",
     "pipeline": "node --conditions=source .runework/scripts/pipeline.ts"
   },
-  "dependencies": {
-    "@runework/cli": "0.1.1",
-    "@runework/core": "0.1.1",
-    "@runework/pipelines": "0.1.1",
-    "zx": "^8.0.0"
-  },
-  "bundleDependencies": [
-    "zx",
-    "@runework/core",
-    "@runework/pipelines",
-    "@runework/cli"
-  ],
   "devDependencies": {
     "@nx/js": "^21.0.0",
     "@swc-node/register": "^1.11.1",

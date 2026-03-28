@@ -89,28 +89,26 @@ test('README keeps the public positioning library-first and direct-CLI friendly'
   )
 })
 
-test('workspace build graph validates adjacent reporter tooling without exporting it from the root runtime', async () => {
-  const buildTsconfig = JSON.parse(
-    await readFile(new URL('../tsconfig.build.json', import.meta.url), 'utf8'),
-  ) as {
-    references?: Array<{ path?: string }>
-  }
+test('workspace build graph validates adjacent reporter tooling without exporting it from the umbrella package', async () => {
+  const buildScript = await readFile(
+    new URL('../../../scripts/build.mjs', import.meta.url),
+    'utf8',
+  )
   const workspaceTsconfig = JSON.parse(
-    await readFile(new URL('../tsconfig.json', import.meta.url), 'utf8'),
+    await readFile(new URL('../../../tsconfig.json', import.meta.url), 'utf8'),
   ) as {
     references?: Array<{ path?: string }>
   }
 
-  const buildRefs = buildTsconfig.references?.map((ref) => ref.path) ?? []
   const workspaceRefs = workspaceTsconfig.references?.map((ref) => ref.path) ?? []
 
-  assert.ok(buildRefs.includes('packages/reporters/tsconfig.build.json'))
+  assert.match(buildScript, /packages\/reporters\/tsconfig\.build\.json/)
   assert.ok(workspaceRefs.includes('packages/reporters/tsconfig.build.json'))
 })
 
 test('release config only targets real Nx projects', async () => {
   const nxJson = JSON.parse(
-    await readFile(new URL('../nx.json', import.meta.url), 'utf8'),
+    await readFile(new URL('../../../nx.json', import.meta.url), 'utf8'),
   ) as {
     release?: { projects?: string[] }
   }
@@ -118,10 +116,10 @@ test('release config only targets real Nx projects', async () => {
   const knownProjects = new Set(
     (await Promise.all([
       '../project.json',
-      '../packages/core/project.json',
-      '../packages/pipelines/project.json',
-      '../packages/cli/project.json',
-      '../packages/reporters/project.json',
+      '../../core/project.json',
+      '../../pipelines/project.json',
+      '../../cli/project.json',
+      '../../reporters/project.json',
     ].map(async (path) => {
       const projectJson = JSON.parse(
         await readFile(new URL(path, import.meta.url), 'utf8'),
@@ -144,7 +142,7 @@ test('CLI helpers re-export from @runework/cli', async () => {
 })
 
 test('dogfood stream reporter emits an immediate startup line and readable provider output', async () => {
-  const { createAgentStreamReporter } = await import('../.runework/scripts/pipeline-ui-contract.ts')
+  const { createAgentStreamReporter } = await import('../../../.runework/scripts/pipeline-ui-contract.ts')
   const events: Array<Record<string, unknown>> = []
   const reporter = createAgentStreamReporter(
     {
@@ -191,7 +189,7 @@ test('dogfood stream reporter emits an immediate startup line and readable provi
 })
 
 test('stream viewport wraps commentary and collapses repeated stderr noise', async () => {
-  const { buildStreamViewportLines } = await import('../.runework/scripts/pipeline-ui.ts')
+  const { buildStreamViewportLines } = await import('../../../.runework/scripts/pipeline-ui.ts')
 
   const lines = buildStreamViewportLines(
     [
@@ -225,7 +223,7 @@ test('stream viewport wraps commentary and collapses repeated stderr noise', asy
 })
 
 test('stream viewport supports scrolling back through prior output', async () => {
-  const { buildStreamViewportLines } = await import('../.runework/scripts/pipeline-ui.ts')
+  const { buildStreamViewportLines } = await import('../../../.runework/scripts/pipeline-ui.ts')
 
   const lines = buildStreamViewportLines(
     [
@@ -246,7 +244,7 @@ test('stream viewport supports scrolling back through prior output', async () =>
 })
 
 test('mouse wheel parser converts sgr mouse scroll sequences into viewport deltas', async () => {
-  const { extractMouseWheelDelta } = await import('../.runework/scripts/pipeline-ui.ts')
+  const { extractMouseWheelDelta } = await import('../../../.runework/scripts/pipeline-ui.ts')
 
   assert.equal(
     extractMouseWheelDelta('\u001B[<64;30;12M\u001B[<65;30;12M\u001B[<64;30;12M'),
@@ -259,7 +257,7 @@ test('mouse wheel parser converts sgr mouse scroll sequences into viewport delta
 })
 
 test('ink exit input mapper treats q and both Ctrl+C encodings as clean exits', async () => {
-  const { getExitRequestCode } = await import('../.runework/scripts/pipeline-ui.ts')
+  const { getExitRequestCode } = await import('../../../.runework/scripts/pipeline-ui.ts')
 
   assert.equal(getExitRequestCode('q', {}), 0)
   assert.equal(getExitRequestCode('c', { ctrl: true }), 0)
@@ -270,7 +268,7 @@ test('ink exit input mapper treats q and both Ctrl+C encodings as clean exits', 
 
 test('repo-local pipeline script uses source exports during development', async () => {
   const packageJson = JSON.parse(
-    await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    await readFile(new URL('../../../package.json', import.meta.url), 'utf8'),
   ) as {
     scripts?: Record<string, unknown>
   }
@@ -283,7 +281,7 @@ test('repo-local pipeline script uses source exports during development', async 
 
 test('code-review dogfood pipeline uses pipeline-managed adapters', async () => {
   const source = await readFile(
-    new URL('../.runework/pipelines/code-review.ts', import.meta.url),
+    new URL('../../../.runework/pipelines/code-review.ts', import.meta.url),
     'utf8',
   )
 
@@ -297,7 +295,7 @@ test('code-review dogfood pipeline uses pipeline-managed adapters', async () => 
 
 test('code-review dogfood pipeline preserves AbortError from adapter-backed phases', async () => {
   const source = await readFile(
-    new URL('../.runework/pipelines/code-review.ts', import.meta.url),
+    new URL('../../../.runework/pipelines/code-review.ts', import.meta.url),
     'utf8',
   )
 
@@ -309,7 +307,7 @@ test('code-review dogfood pipeline preserves AbortError from adapter-backed phas
 
 test('constitutional alignment dogfood pipeline uses pipeline-managed adapters', async () => {
   const source = await readFile(
-    new URL('../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
+    new URL('../../../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
     'utf8',
   )
 
@@ -320,7 +318,7 @@ test('constitutional alignment dogfood pipeline uses pipeline-managed adapters',
 
 test('constitutional alignment dogfood pipeline preserves AbortError from codex runs', async () => {
   const source = await readFile(
-    new URL('../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
+    new URL('../../../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
     'utf8',
   )
 
@@ -332,7 +330,7 @@ test('constitutional alignment dogfood pipeline preserves AbortError from codex 
 
 test('constitutional alignment keeps review constrained and elevates only commit retries', async () => {
   const source = await readFile(
-    new URL('../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
+    new URL('../../../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
     'utf8',
   )
 
@@ -346,7 +344,7 @@ test('constitutional alignment keeps review constrained and elevates only commit
 
 test('constitutional alignment prompt treats committed .runework as the sanctioned dogfood boundary', async () => {
   const source = await readFile(
-    new URL('../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
+    new URL('../../../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
     'utf8',
   )
 

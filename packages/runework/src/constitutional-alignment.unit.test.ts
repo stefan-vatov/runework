@@ -4,7 +4,7 @@ import test from 'node:test'
 
 test('release automation excludes adjacent reporter tooling from versioned runtime packages', async () => {
   const nxJson = JSON.parse(
-    await readFile(new URL('../nx.json', import.meta.url), 'utf8'),
+    await readFile(new URL('../../../nx.json', import.meta.url), 'utf8'),
   ) as {
     release?: { projects?: string[] }
   }
@@ -20,7 +20,7 @@ test('release automation excludes adjacent reporter tooling from versioned runti
 
 test('runCli shell policy stays environment-agnostic and does not depend on interactive shell features', async () => {
   const source = await readFile(
-    new URL('../packages/core/src/core/run-cli.ts', import.meta.url),
+    new URL('../../core/src/core/run-cli.ts', import.meta.url),
     'utf8',
   )
 
@@ -31,7 +31,7 @@ test('runCli shell policy stays environment-agnostic and does not depend on inte
 
 test('detectTools versions the exact resolved executable path instead of re-resolving through PATH', async () => {
   const source = await readFile(
-    new URL('../packages/core/src/core/detect.ts', import.meta.url),
+    new URL('../../core/src/core/detect.ts', import.meta.url),
     'utf8',
   )
 

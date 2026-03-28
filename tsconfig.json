@@ -1,7 +1,7 @@
 {
   "files": [],
   "references": [
-    { "path": "tsconfig.build.json" },
+    { "path": "packages/runework/tsconfig.build.json" },
     { "path": "packages/core/tsconfig.build.json" },
     { "path": "packages/reporters/tsconfig.build.json" },
     { "path": "packages/pipelines/tsconfig.build.json" },

@@ -4,18 +4,18 @@ This repo uses `nx release` for versioning, changelog generation, and git taggin
 
 Why this setup:
 
-- `runework` is the only public npm package in this workspace.
-- `packages/core`, `packages/pipelines`, and `packages/cli` are private implementation packages bundled into the root package.
+- `packages/runework` is the only public npm package in this workspace.
+- `packages/core`, `packages/pipelines`, and `packages/cli` are private implementation packages bundled into the umbrella package.
 - `packages/reporters` is adjacent private tooling kept out of the root runtime surface and out of release automation.
-- The root package already declares versioned dependencies on the bundled private workspace packages, so release automation only needs to keep those versions aligned and the publish manifest internally consistent.
+- The umbrella package already declares versioned dependencies on the bundled private workspace packages, so release automation only needs to keep those versions aligned and the publish manifest internally consistent.
 - Nx Release is already part of the workspace, so it fits better here than layering Changesets or semantic-release on top.
 
 ## What gets released
 
-The public root package and the bundled private workspace packages participate in releases together.
+The public umbrella package and the bundled private workspace packages participate in releases together.
 
 - Version sources:
-  - root [`package.json`](../package.json)
+  - [`packages/runework/package.json`](../packages/runework/package.json)
   - [`packages/core/package.json`](../packages/core/package.json)
   - [`packages/pipelines/package.json`](../packages/pipelines/package.json)
   - [`packages/cli/package.json`](../packages/cli/package.json)
@@ -26,7 +26,7 @@ The public root package and the bundled private workspace packages participate i
 
 The bundled private workspace packages are not independently published. They are versioned in lockstep so the workspace, the bundled tarball, and the published manifest stay internally consistent. `npm publish --dry-run` is expected to pass without publish-time manifest corrections.
 
-`@runework/reporters` stays private and unbundled on purpose. It is validated in the workspace build, but it does not ship through the root runtime package and does not participate in `nx release`.
+`@runework/reporters` stays private and unbundled on purpose. It is validated in the workspace build, but it does not ship through the umbrella runtime package and does not participate in `nx release`.
 
 ## Local release flow
 
@@ -52,7 +52,7 @@ npm run release:major
 
 Each release will:
 
-1. update the root package version
+1. update the umbrella package version
 2. update or create `CHANGELOG.md`
 3. create a release commit
 4. create a git tag like `v0.2.0`
@@ -87,7 +87,7 @@ Recommended flow:
 Recommended npm auth model:
 
 - use npm trusted publishing with GitHub Actions
-- keep `publishConfig.access: "public"` in the root `package.json`
+- keep `publishConfig.access: "public"` in [`packages/runework/package.json`](../packages/runework/package.json)
 - give the publish workflow `id-token: write`
 
 Minimal future workflow:

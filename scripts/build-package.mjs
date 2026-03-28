@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Shared build helper for workspace packages.
- * Usage: node scripts/build-package.mjs <tsconfig> [--chmod <dir>]
+ * Usage: node scripts/build-package.mjs <tsconfig> [--chmod <dir>] [--bundle-deps]
  */
-import { chmodSync, existsSync, readdirSync, rmSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import { join, dirname, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -14,7 +14,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url))
 const tscEntrypoint = join(scriptDir, '..', 'node_modules', 'typescript', 'bin', 'tsc')
 
 if (!tsconfigPath) {
-  console.error('Usage: node scripts/build-package.mjs <tsconfig.build.json> [--chmod <dir>]')
+  console.error('Usage: node scripts/build-package.mjs <tsconfig.build.json> [--chmod <dir>] [--bundle-deps]')
   process.exit(1)
 }
 
@@ -24,6 +24,8 @@ const chmodIdx = args.indexOf('--chmod')
 if (chmodIdx !== -1 && args[chmodIdx + 1]) {
   chmodDir = args[chmodIdx + 1]
 }
+
+const shouldBundleDeps = args.includes('--bundle-deps')
 
 // Determine output dir from tsconfig location
 const packageDir = dirname(tsconfigPath)
@@ -45,5 +47,48 @@ if (chmodDir && existsSync(chmodDir)) {
     if (file.endsWith('.js')) {
       chmodSync(join(chmodDir, file), 0o755)
     }
+  }
+}
+
+if (shouldBundleDeps) {
+  const packageJson = JSON.parse(
+    readFileSync(join(packageDir, 'package.json'), 'utf8'),
+  )
+  const bundleDependencies = Array.isArray(packageJson.bundleDependencies)
+    ? packageJson.bundleDependencies
+    : []
+
+  const packageNodeModulesDir = join(packageDir, 'node_modules')
+  const workspaceRoot = join(scriptDir, '..')
+
+  rmSync(packageNodeModulesDir, { recursive: true, force: true })
+
+  for (const dependency of bundleDependencies) {
+    const dependencyPathParts = dependency.split('/')
+    const dependencyDest = join(packageNodeModulesDir, ...dependencyPathParts)
+    const dependencyParent = dirname(dependencyDest)
+
+    let dependencySource
+    if (dependency.startsWith('@runework/')) {
+      dependencySource = join(
+        workspaceRoot,
+        'packages',
+        dependency.slice('@runework/'.length),
+      )
+    } else {
+      dependencySource = join(workspaceRoot, 'node_modules', ...dependencyPathParts)
+    }
+
+    if (!existsSync(dependencySource)) {
+      console.error(`Bundled dependency not found: ${dependency} (${dependencySource})`)
+      process.exit(1)
+    }
+
+    mkdirSync(dependencyParent, { recursive: true })
+    symlinkSync(
+      relative(dependencyParent, dependencySource),
+      dependencyDest,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    )
   }
 }

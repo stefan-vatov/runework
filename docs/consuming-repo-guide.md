@@ -12,7 +12,7 @@
 From a local checkout of `runework`:
 
 ```bash
-node --conditions=source /path/to/runework/src/cli/init.ts
+node --conditions=source /path/to/runework/packages/runework/src/cli/init.ts
 ```
 
 Or from an installed package:

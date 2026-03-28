@@ -81,7 +81,7 @@ async function createDogfoodRepo(t: { after: (cleanup: () => Promise<void>) => v
   )
   await writeFile(join(runeworkDir, 'pipelines', 'code-review.ts'), reviewPipeline, 'utf8')
   await writeFile(join(runeworkDir, 'scripts', 'pipeline-ui-contract.ts'), pipelineUiContract, 'utf8')
-  await symlink(process.cwd(), join(runeworkDir, 'node_modules', 'runework'), 'dir')
+  await symlink(join(process.cwd(), 'packages', 'runework'), join(runeworkDir, 'node_modules', 'runework'), 'dir')
   await writeFile(join(repoRoot, 'README.md'), '# temp repo\n', 'utf8')
   await writeFile(join(repoRoot, '.gitignore'), '.runework/node_modules/\n.runework/.work/\n', 'utf8')
 
@@ -436,7 +436,7 @@ test('runework-init supports --force and scaffolds a blank .runework package', a
   const targetDir = join(tmpRoot, 'repo')
   await mkdir(targetDir, { recursive: true })
 
-  const initEntry = join(process.cwd(), 'src', 'cli', 'init.ts')
+  const initEntry = join(process.cwd(), 'packages', 'runework', 'src', 'cli', 'init.ts')
   const baseArgs = [
     '--conditions=source',
     initEntry,
@@ -451,7 +451,7 @@ test('runework-init supports --force and scaffolds a blank .runework package', a
   const generatedPkg = JSON.parse(
     await readFile(join(runeworkDir, 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string>; scripts?: Record<string, string> }
-  assert.equal(generatedPkg.dependencies?.runework, `file:${process.cwd()}`)
+  assert.equal(generatedPkg.dependencies?.runework, `file:${join(process.cwd(), 'packages', 'runework')}`)
   assert.equal(generatedPkg.scripts, undefined)
 
   const generatedTsconfig = JSON.parse(
@@ -507,7 +507,7 @@ test('runPipeline executes a user-authored pipeline inside a scaffolded repo', a
   const targetDir = join(tmpRoot, 'repo')
   await mkdir(targetDir, { recursive: true })
 
-  const initEntry = join(process.cwd(), 'src', 'cli', 'init.ts')
+  const initEntry = join(process.cwd(), 'packages', 'runework', 'src', 'cli', 'init.ts')
   const init = runCommand(
     process.execPath,
     ['--conditions=source', initEntry, targetDir, '--no-install'],
@@ -517,7 +517,7 @@ test('runPipeline executes a user-authored pipeline inside a scaffolded repo', a
 
   const runeworkDir = join(targetDir, '.runework')
   await mkdir(join(runeworkDir, 'node_modules'), { recursive: true })
-  await symlink(process.cwd(), join(runeworkDir, 'node_modules', 'runework'), 'dir')
+  await symlink(join(process.cwd(), 'packages', 'runework'), join(runeworkDir, 'node_modules', 'runework'), 'dir')
 
   await writeFile(
     join(runeworkDir, 'pipelines', 'hello.ts'),

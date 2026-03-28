@@ -99,7 +99,7 @@ npx runework-pipeline --json my-pipeline
 
 All adapter runs are journaled into `.runework/.work/runs/` when your scripts or pipelines call `writeJournal()`.
 
-From a source checkout of this repo, the equivalent development commands are `npm run run -- ...`, `npm run detect`, `npm run detect -- --json`, and `node --conditions=source src/cli/init.ts`.
+From a source checkout of this repo, the equivalent development commands are `npm run run -- ...`, `npm run detect`, `npm run detect -- --json`, and `node --conditions=source packages/runework/src/cli/init.ts`.
 
 ## Scaffold
 
@@ -119,18 +119,13 @@ You author the scripts, prompts, and policies inside that target repo. `runework
 
 ```text
 packages/
+  runework/     public umbrella package
   core/         adapters, execution, templating, journaling, JSON helpers
   pipelines/    durable local pipeline runtime
   cli/          thin CLI command implementations
   reporters/    adjacent reporter utilities kept out of the root runtime surface
-src/
-  index.ts      root compatibility facade
-  adapters/     root adapter re-exports
-  core/         root core re-exports
-  pipelines/    root pipeline re-exports
-  cli/          root entrypoints
 scripts/
   build.mjs     clean build + CLI permission fixup
-templates/
-  runework/     blank .runework scaffold
+.runework/
+  ...           repo-local dogfood workflows and tooling
 ```

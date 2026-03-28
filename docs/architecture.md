@@ -7,6 +7,10 @@
 ```text
 runework/
   packages/
+    runework/src/
+      index.ts         # umbrella package facade
+      cli/
+        *.ts           # public executable entrypoints
     core/src/
       core/
         run-cli.ts       # shared zx-backed CLI execution
@@ -29,23 +33,11 @@ runework/
       init.ts
       pipeline.ts
     reporters/src/
-      ...                # optional adjacent reporter utilities, not exported by root package
+      ...                # optional adjacent reporter utilities, not exported by the umbrella package
   scripts/
     build.mjs          # workspace build entrypoint
-  src/
-    index.ts           # root compatibility facade
-    core/
-      index.ts         # root core re-exports
-    adapters/
-      index.ts         # root adapter re-exports
-    pipelines/
-      index.ts         # root pipeline re-exports
-    cli/
-      *.ts             # root executable entrypoints
-  templates/
-    runework/
-      package.json.tmpl
-      tsconfig.json
+  .runework/
+    ...                # repo-local dogfood workflows and UI
 ```
 
 ## TypeScript execution model
@@ -62,8 +54,8 @@ The package uses conditional exports:
 }
 ```
 
-- `node --conditions=source` resolves to `src/*.ts` for repository development.
-- The root `src/*.ts` files are thin facades and entrypoints over the workspace packages.
+- `node --conditions=source` resolves to package `src/*.ts` files for repository development.
+- The umbrella package at `packages/runework/src/*.ts` is a thin facade and entrypoint layer over the workspace packages.
 - TypeScript and editors resolve to `dist/*.d.ts`.
 - Standard Node resolution uses `dist/*.js` for installed consumers.
 

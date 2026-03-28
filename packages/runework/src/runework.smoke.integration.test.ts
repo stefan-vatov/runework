@@ -2,11 +2,14 @@ import assert from 'node:assert/strict'
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const initBinName = process.platform === 'win32' ? 'runework-init.cmd' : 'runework-init'
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const workspaceRoot = resolve(packageRoot, '..', '..')
 
 function runCommand(
   command: string,
@@ -53,8 +56,8 @@ function buildWorkspace(repoRoot: string) {
       label: 'building @runework/cli failed',
     },
     {
-      args: ['scripts/build-package.mjs', 'tsconfig.build.json', '--chmod', 'dist/cli'],
-      label: 'building root package failed',
+      args: ['scripts/build-package.mjs', 'packages/runework/tsconfig.build.json', '--chmod', 'packages/runework/bin', '--bundle-deps'],
+      label: 'building runework package failed',
     },
   ]
 
@@ -67,14 +70,13 @@ function buildWorkspace(repoRoot: string) {
 }
 
 test('packed artifact installs and scaffolds a blank consumer runtime', async (t) => {
-  const repoRoot = resolve('.')
   const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-pack-smoke-'))
   t.after(async () => {
     await rm(tmpRoot, { recursive: true, force: true })
   })
 
   const manifest = JSON.parse(
-    await readFile(join(repoRoot, 'package.json'), 'utf8'),
+    await readFile(join(packageRoot, 'package.json'), 'utf8'),
   ) as { version: string }
 
   const packDir = join(tmpRoot, 'pack')
@@ -90,13 +92,13 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
   await mkdir(consumerDir, { recursive: true })
   await mkdir(npmCacheDir, { recursive: true })
 
-  buildWorkspace(repoRoot)
+  buildWorkspace(workspaceRoot)
 
   assertSucceeded(
     runCommand(
       npmCommand,
       ['pack', '--ignore-scripts', '--pack-destination', packDir],
-      repoRoot,
+      packageRoot,
       { env: npmEnv },
     ),
     'npm pack failed for smoke test',

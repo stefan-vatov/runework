@@ -10,7 +10,7 @@ const commands = [
   ['scripts/build-package.mjs', 'packages/reporters/tsconfig.build.json'],
   ['scripts/build-package.mjs', 'packages/pipelines/tsconfig.build.json'],
   ['scripts/build-package.mjs', 'packages/cli/tsconfig.build.json'],
-  ['scripts/build-package.mjs', 'tsconfig.build.json', '--chmod', 'dist/cli'],
+  ['scripts/build-package.mjs', 'packages/runework/tsconfig.build.json', '--chmod', 'packages/runework/bin', '--bundle-deps'],
 ]
 
 for (const args of commands) {

@@ -147,7 +147,7 @@ test('initCommand scaffolds .runework/ with injected deps', async (t) => {
   const targetDir = join(tmpRoot, 'repo')
   await mkdir(targetDir, { recursive: true })
 
-  const runeworkRoot = resolve('.')
+  const runeworkRoot = resolve('packages/runework')
   const { code, output } = await captureConsole('error', () =>
     initCommand(
       [targetDir, '--no-install'],
@@ -184,7 +184,7 @@ test('initCommand installs dependencies through the shared runner contract', asy
   const targetDir = join(tmpRoot, 'repo')
   await mkdir(targetDir, { recursive: true })
 
-  const runeworkRoot = resolve('.')
+  const runeworkRoot = resolve('packages/runework')
   let installCall:
     | {
       bin: string
@@ -235,7 +235,7 @@ test('initCommand returns 1 when .runework/ exists without --force', async (t) =
   const targetDir = join(tmpRoot, 'repo')
   await mkdir(join(targetDir, '.runework'), { recursive: true })
 
-  const runeworkRoot = resolve('.')
+  const runeworkRoot = resolve('packages/runework')
   const code = await initCommand(
     [targetDir, '--no-install'],
     {
@@ -257,7 +257,7 @@ test('initCommand surfaces install failures instead of silently continuing', asy
   const targetDir = join(tmpRoot, 'repo')
   await mkdir(targetDir, { recursive: true })
 
-  const runeworkRoot = resolve('.')
+  const runeworkRoot = resolve('packages/runework')
   await assert.rejects(
     () =>
       initCommand(
@@ -308,7 +308,7 @@ test('pipeline CLI streams structured progress events before the final summary',
     'utf8',
   )
 
-  const cliEntry = resolve('src/cli/pipeline.ts')
+  const cliEntry = resolve('packages/runework/src/cli/pipeline.ts')
   const result = spawnSync(
     process.execPath,
     ['--conditions=source', cliEntry, 'stream-progress'],
@@ -362,7 +362,7 @@ test('pipeline CLI emits the final result as JSON when --json is requested', asy
     'utf8',
   )
 
-  const cliEntry = resolve('src/cli/pipeline.ts')
+  const cliEntry = resolve('packages/runework/src/cli/pipeline.ts')
   const result = spawnSync(
     process.execPath,
     ['--conditions=source', cliEntry, '--json', 'stream-progress'],
@@ -409,7 +409,7 @@ test('run CLI emits structured JSON when --json is requested', async (t) => {
   await mkdir(repoRoot, { recursive: true })
   const fakeCodexBinDir = await createFakeCodexCli(t)
 
-  const cliEntry = resolve('src/cli/run.ts')
+  const cliEntry = resolve('packages/runework/src/cli/run.ts')
   const result = spawnSync(
     process.execPath,
     ['--conditions=source', cliEntry, '--json', 'codex', 'hello from cli'],
@@ -468,7 +468,7 @@ test('run CLI keeps --json output structured when the provider binary is unavail
   )
   await chmod(fakeCodexPath, 0o755)
 
-  const cliEntry = resolve('src/cli/run.ts')
+  const cliEntry = resolve('packages/runework/src/cli/run.ts')
   const result = spawnSync(
     process.execPath,
     ['--conditions=source', cliEntry, '--json', 'codex', 'hello from cli'],
@@ -521,7 +521,7 @@ test('run CLI emits structured JSON errors when --json is requested and adapter 
   const repoRoot = join(tmpRoot, 'repo')
   await mkdir(repoRoot, { recursive: true })
 
-  const cliEntry = resolve('src/cli/run.ts')
+  const cliEntry = resolve('packages/runework/src/cli/run.ts')
   const result = spawnSync(
     process.execPath,
     ['--conditions=source', cliEntry, '--json', 'bogus', 'hello from cli'],
