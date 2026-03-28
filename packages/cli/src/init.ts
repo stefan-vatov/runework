@@ -1,4 +1,4 @@
-import { chmod, cp, mkdir, readdir, readFile, rm, writeFile, stat } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm, writeFile, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { renderTemplate, runCli } from '@runework/core'
 import { ensureGitignoreEntries } from '@runework/pipelines'
@@ -41,19 +41,6 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-async function chmodTemplateScripts(runeworkDir: string): Promise<void> {
-  if (process.platform === 'win32') return
-
-  const scriptsDir = join(runeworkDir, 'scripts')
-  const entries = await readdir(scriptsDir).catch(() => [])
-
-  await Promise.all(
-    entries
-      .filter((entry) => entry.endsWith('.ts'))
-      .map((entry) => chmod(join(scriptsDir, entry), 0o755)),
-  )
 }
 
 async function installRuneworkDependencies(
@@ -108,7 +95,6 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
 
   // 3. Copy tsconfig.json.
   await cp(join(deps.templatesRuneworkDir, 'tsconfig.json'), join(runeworkDir, 'tsconfig.json'))
-  await chmodTemplateScripts(runeworkDir)
 
   // 4. Update .gitignore.
   await ensureGitignoreEntries(flags.targetDir, [

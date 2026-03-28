@@ -52,6 +52,8 @@ export type AgentRunRequest = {
   extraArgs?: string[]
   /** Realtime stdout/stderr chunks emitted by the underlying CLI process */
   onOutputChunk?: (chunk: AgentOutputChunk) => void
+  /** AbortSignal propagated to the underlying CLI process */
+  signal?: AbortSignal
   /** Timeout in ms for the entire run */
   timeoutMs?: number
 }

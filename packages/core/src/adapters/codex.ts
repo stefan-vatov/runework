@@ -135,6 +135,7 @@ export class CodexAdapter implements AgentAdapter {
       onOutputChunk: request.onOutputChunk
         ? (chunk) => request.onOutputChunk?.({ provider: this.name, ...chunk })
         : undefined,
+      signal: request.signal,
       timeoutMs: request.timeoutMs,
     })
 

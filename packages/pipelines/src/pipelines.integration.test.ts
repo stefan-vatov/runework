@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -23,6 +23,29 @@ async function linkRuneworkPackage(runeworkDir: string): Promise<void> {
   await symlink(process.cwd(), packageLink, 'dir').catch((error: NodeJS.ErrnoException) => {
     if (error.code !== 'EEXIST') throw error
   })
+}
+
+async function createFakeCli(
+  t: { after: (cleanup: () => Promise<void> | void) => void },
+  name: string,
+  script: string,
+): Promise<{ binDir: string; pathEnv: string }> {
+  const tmpRoot = await mkdtemp(join(tmpdir(), `runework-pipeline-${name}-`))
+  t.after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  const binDir = join(tmpRoot, 'bin')
+  await mkdir(binDir, { recursive: true })
+
+  const scriptPath = join(binDir, name)
+  await writeFile(scriptPath, script, 'utf8')
+  await chmod(scriptPath, 0o755)
+
+  return {
+    binDir,
+    pathEnv: `${binDir}:${process.env.PATH ?? ''}`,
+  }
 }
 
 test('runPipeline creates a unique output directory for each run', async (t) => {
@@ -387,4 +410,62 @@ test('runPipeline de-duplicates concurrent step calls with the same step ID', as
   assert.equal(result.ok, true)
   assert.equal(result.summary, '1:1')
   assert.equal(await readFile(join(tmpRoot, 'step.log'), 'utf8'), 'same\n')
+})
+
+test('runPipeline abort signal propagates into adapter-backed steps without wrapping the error', async (t) => {
+  const fake = await createFakeCli(
+    t,
+    'codex',
+    [
+      '#!/usr/bin/env node',
+      "process.on('SIGTERM', () => {})",
+      "setTimeout(() => process.stdout.write('{\"type\":\"turn.started\"}\\n'), 20)",
+      "setTimeout(() => process.stdout.write('{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"late\"}}\\n'), 800)",
+      'setTimeout(() => process.exit(0), 1200)',
+      '',
+    ].join('\n'),
+  )
+
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-abort-pipeline-'))
+  t.after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  const runeworkDir = join(tmpRoot, '.runework')
+  await writePipeline(
+    runeworkDir,
+    'abort-agent',
+    [
+      'export default async function pipeline(ctx) {',
+      "  await ctx.adapters.codex.run({",
+      "    prompt: 'abort this run',",
+      "    env: { PATH: String(ctx.options.pathEnv) },",
+      '    onOutputChunk() {},',
+      '  })',
+      "  return { ok: true, summary: 'done' }",
+      '}',
+      '',
+    ].join('\n'),
+  )
+
+  const controller = new AbortController()
+  const startedAt = Date.now()
+  const run = runPipeline('abort-agent', runeworkDir, {
+    options: { pathEnv: fake.pathEnv },
+    signal: controller.signal,
+  })
+
+  setTimeout(() => {
+    controller.abort()
+  }, 40)
+
+  await assert.rejects(
+    run,
+    (error: unknown) => error instanceof Error && error.name === 'AbortError',
+  )
+
+  assert.ok(
+    Date.now() - startedAt < 500,
+    `expected runPipeline to abort promptly, took ${Date.now() - startedAt}ms`,
+  )
 })

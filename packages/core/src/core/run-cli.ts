@@ -18,6 +18,7 @@ export type CliRunOptions = {
   stdin?: string
   quiet?: boolean
   onOutputChunk?: (chunk: CliOutputChunk) => void
+  signal?: AbortSignal
   timeoutMs?: number
 }
 
@@ -85,11 +86,21 @@ function resolveShellOptions(): {
   }
 }
 
+function createAbortError(message = 'CLI run aborted'): Error {
+  const error = new Error(message)
+  error.name = 'AbortError'
+  return error
+}
+
 /**
  * Single place for all CLI execution. Sets quiet, nothrow, cwd, env,
  * stdin, and timeout policy. Every adapter goes through here.
  */
 export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
+  if (opts.signal?.aborted) {
+    throw createAbortError()
+  }
+
   const args = opts.args ?? []
   const cwd = opts.cwd ?? process.cwd()
   const start = Date.now()
@@ -98,6 +109,7 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
   const stderrDecoder = new StringDecoder('utf8')
   let streamError: unknown
   let childError: NodeJS.ErrnoException | undefined
+  let abortError: Error | undefined
 
   const proc = $({
     cwd,
@@ -112,6 +124,7 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
   // zx template: bin is a single string, args array gets properly escaped
   const processPromise = proc`${opts.bin} ${args}`
   let abortTimer: NodeJS.Timeout | undefined
+  let removeAbortListener: (() => void) | undefined
   processPromise.child?.once('error', (error) => {
     childError = error instanceof Error
       ? error as NodeJS.ErrnoException
@@ -122,9 +135,16 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
       clearTimeout(abortTimer)
       abortTimer = undefined
     }
+
+    removeAbortListener?.()
+    removeAbortListener = undefined
   })
 
-  const abortForStreamError = (): void => {
+  const abortProcess = (error: Error): void => {
+    if (!abortError) {
+      abortError = error
+    }
+
     try {
       processPromise.child?.kill('SIGTERM')
     } catch {
@@ -143,6 +163,17 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
     }
   }
 
+  if (opts.signal) {
+    const onAbort = () => {
+      abortProcess(createAbortError())
+    }
+
+    opts.signal.addEventListener('abort', onAbort, { once: true })
+    removeAbortListener = () => {
+      opts.signal?.removeEventListener('abort', onAbort)
+    }
+  }
+
   const emitChunk = (stream: CliOutputStreamName, text: string): void => {
     if (!text) return
     combinedChunks.push(text)
@@ -152,7 +183,11 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
       opts.onOutputChunk({ stream, text })
     } catch (error) {
       streamError = error
-      abortForStreamError()
+      abortProcess(
+        error instanceof Error
+          ? error
+          : new Error(String(error)),
+      )
     }
   }
 
@@ -169,14 +204,20 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
   } catch (error) {
     emitChunk('stdout', stdoutDecoder.end())
     emitChunk('stderr', stderrDecoder.end())
+    removeAbortListener?.()
+    removeAbortListener = undefined
     if (streamError) throw streamError
+    if (abortError) throw abortError
     throw error
   }
 
   emitChunk('stdout', stdoutDecoder.end())
   emitChunk('stderr', stderrDecoder.end())
+  removeAbortListener?.()
+  removeAbortListener = undefined
 
   if (streamError) throw streamError
+  if (abortError) throw abortError
 
   const exitCode = output.exitCode ?? (childError?.code === 'ENOENT' ? 127 : null)
   const stdout = output.stdout ?? ''

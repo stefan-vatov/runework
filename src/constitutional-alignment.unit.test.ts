@@ -28,3 +28,13 @@ test('runCli shell policy stays environment-agnostic and does not depend on inte
   assert.doesNotMatch(source, /pipefail/)
   assert.match(source, /prefix:\s*'set -eu;'/)
 })
+
+test('detectTools versions the exact resolved executable path instead of re-resolving through PATH', async () => {
+  const source = await readFile(
+    new URL('../packages/core/src/core/detect.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /bin:\s*path,/)
+  assert.doesNotMatch(source, /bin:\s*name,/)
+})

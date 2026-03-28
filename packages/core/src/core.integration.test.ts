@@ -100,6 +100,45 @@ test('runCli aborts promptly and preserves the callback error when streaming fai
   )
 })
 
+test('runCli abort signal terminates the CLI promptly with an AbortError', async (t) => {
+  const fake = await createFakeCli(
+    t,
+    'abort-signal-cli',
+    [
+      '#!/usr/bin/env node',
+      "process.on('SIGTERM', () => {})",
+      "setTimeout(() => process.stdout.write('still-running\\n'), 800)",
+      'setTimeout(() => process.exit(0), 1200)',
+      '',
+    ].join('\n'),
+  )
+
+  const controller = new AbortController()
+  const startedAt = Date.now()
+  const run = runCli({
+    bin: 'abort-signal-cli',
+    env: { PATH: fake.pathEnv },
+    signal: controller.signal,
+  })
+
+  setTimeout(() => {
+    controller.abort()
+  }, 25)
+
+  await assert.rejects(
+    run,
+    (error: unknown) =>
+      error instanceof Error
+      && error.name === 'AbortError'
+      && /aborted/i.test(error.message),
+  )
+
+  assert.ok(
+    Date.now() - startedAt < 500,
+    `expected runCli to abort promptly, took ${Date.now() - startedAt}ms`,
+  )
+})
+
 test('runCli preserves spawn failures when the process never starts', async () => {
   const result = await runCli({
     bin: 'runework-missing-bin-for-test',

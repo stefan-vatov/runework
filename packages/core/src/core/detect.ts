@@ -87,7 +87,9 @@ export async function detectTools(
         // Try --version, -V, version because provider CLIs are inconsistent here.
         for (const flag of ['--version', '-V', 'version']) {
           const ver = await runCli({
-            bin: name,
+            // Version the exact executable we resolved so the reported path and
+            // version always describe the same underlying binary.
+            bin: path,
             args: [flag],
             quiet: true,
             timeoutMs: 5_000,

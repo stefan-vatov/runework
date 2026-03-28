@@ -17,6 +17,21 @@ import type {
   PipelineSpawnResult,
 } from './types.ts'
 
+function createAbortError(message = 'Pipeline run aborted'): Error {
+  const error = new Error(message)
+  error.name = 'AbortError'
+  return error
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+function throwIfAborted(signal: AbortSignal | undefined, message?: string): void {
+  if (!signal?.aborted) return
+  throw createAbortError(message)
+}
+
 function isRunPipelineOptions(
   runOptions: RunPipelineOptions | Record<string, unknown>,
 ): runOptions is RunPipelineOptions {
@@ -26,6 +41,7 @@ function isRunPipelineOptions(
     'runId' in runOptions ||
     'resumeRunId' in runOptions ||
     'parentRunId' in runOptions ||
+    'signal' in runOptions ||
     typeof runOptions.log === 'function' ||
     typeof runOptions.onProgress === 'function'
   )
@@ -79,6 +95,7 @@ export type RunPipelineOptions = {
   runId?: string
   resumeRunId?: string
   parentRunId?: string
+  signal?: AbortSignal
 }
 
 export async function runPipeline(
@@ -95,8 +112,11 @@ export async function runPipeline(
   const explicitRunId = isRunPipelineOptions(runOptions) ? runOptions.runId : undefined
   const resumeRunId = isRunPipelineOptions(runOptions) ? runOptions.resumeRunId : undefined
   const parentRunId = isRunPipelineOptions(runOptions) ? runOptions.parentRunId : undefined
+  const signal = isRunPipelineOptions(runOptions) ? runOptions.signal : undefined
   const absRuneworkDir = resolve(runeworkDir)
   const repoRoot = dirname(absRuneworkDir)
+
+  throwIfAborted(signal)
 
   // Resolve pipeline path: name.ts or name/index.ts
   let pipelinePath = join(absRuneworkDir, 'pipelines', `${pipelineName}.ts`)
@@ -130,7 +150,16 @@ export async function runPipeline(
   // Build adapter map
   const adapterMap: Record<string, ReturnType<typeof getAdapters>[number]> = {}
   for (const adapter of getAdapters()) {
-    adapterMap[adapter.name] = adapter
+    adapterMap[adapter.name] = {
+      ...adapter,
+      async run(request) {
+        throwIfAborted(signal)
+        return adapter.run({
+          ...request,
+          signal,
+        })
+      },
+    }
   }
 
   const runtime = await createPipelineWorkflowRuntime({
@@ -141,11 +170,13 @@ export async function runPipeline(
     version: getWorkflowPipelineMeta(pipelineFn).version,
     parentRunId,
     async spawnPipeline(request) {
+      throwIfAborted(signal)
       return runPipeline(request.pipelineName, absRuneworkDir, {
         options: request.options ?? {},
         runId: request.runId,
         resumeRunId: request.resumeRunId,
         parentRunId: runId,
+        signal,
       }) as Promise<PipelineSpawnResult>
     },
   })
@@ -192,9 +223,15 @@ export async function runPipeline(
   }
 
   try {
+    throwIfAborted(signal)
     const result = await pipelineFn(ctx)
+    throwIfAborted(signal)
     return runtime.complete(result)
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error
+    }
+
     await runtime.fail(error)
     throw new PipelineRunError(
       pipelineName,

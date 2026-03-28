@@ -55,12 +55,23 @@ type PipelineUiAction =
   | { type: 'done'; result: PipelineResult }
   | { type: 'error'; message: string }
 
+type ExitKeyState = {
+  ctrl?: boolean
+  meta?: boolean
+}
+
 const MAX_OUTPUT_LINES = 200
 const h = createElement
 const MIN_STREAM_HEIGHT = 10
 const RESERVED_SCREEN_LINES = 8
 const ENABLE_MOUSE_SCROLL = '\u001B[?1000h\u001B[?1006h'
 const DISABLE_MOUSE_SCROLL = '\u001B[?1000l\u001B[?1006l'
+const STREAM_TEXT_COLOR = '#f5f7ff'
+const STREAM_ERROR_COLOR = '#ffb0b0'
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
 
 function humanizePipelineName(name: string): string {
   return name
@@ -281,6 +292,21 @@ export function extractMouseWheelDelta(input: string): number {
   return delta
 }
 
+export function getExitRequestCode(
+  input: string,
+  key: ExitKeyState,
+): number | undefined {
+  if (input === 'q' && !key.ctrl && !key.meta) {
+    return 0
+  }
+
+  if (input === 'c' && key.ctrl) {
+    return 0
+  }
+
+  return undefined
+}
+
 export function buildStreamViewportLines(
   lines: PipelineOutputLine[],
   width: number,
@@ -447,7 +473,7 @@ function renderActiveJob(job: PipelineJobState | undefined, width: number) {
     h(Box, { width: 2 }, job ? renderStatusIndicator(job) : h(Text, { dimColor: true }, '·')),
     h(
       Text,
-      { color: 'white', wrap: 'truncate-end' },
+      { color: STREAM_TEXT_COLOR, wrap: 'truncate-end' },
       wrapText(base, Math.max(1, width))[0] ?? '',
     ),
   )
@@ -484,7 +510,7 @@ function renderStreamBox(
             Text,
             {
               color: line.text
-                ? (line.stream === 'stderr' ? 'red' : 'white')
+                ? (line.stream === 'stderr' ? STREAM_ERROR_COLOR : STREAM_TEXT_COLOR)
                 : 'gray',
               dimColor: !line.text,
               wrap: 'truncate-end',
@@ -532,7 +558,23 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
   const { stdout, write } = useStdout()
   const [state, dispatch] = useReducer(uiReducer, createInitialState(props.pipelineName))
   const [streamScrollOffset, setStreamScrollOffset] = useState(0)
+  const abortControllerRef = useRef(new AbortController())
   const previousPrimaryJobIdRef = useRef<string | undefined>(undefined)
+  const requestedExitCodeRef = useRef<number | undefined>(undefined)
+  const runSettledRef = useRef(false)
+
+  const requestExit = (code = 0) => {
+    if (requestedExitCodeRef.current !== undefined) return
+
+    requestedExitCodeRef.current = code
+    if (!abortControllerRef.current.signal.aborted) {
+      abortControllerRef.current.abort()
+    }
+
+    if (runSettledRef.current) {
+      exit(code)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -542,6 +584,7 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
         const result = await runPipeline(props.pipelineName, props.runeworkDir, {
           options: props.pipelineOptions,
           resumeRunId: props.resumeRunId,
+          signal: abortControllerRef.current.signal,
           log: () => {},
           onProgress: (event) => {
             if (active && isDogfoodProgressEvent(event)) {
@@ -551,9 +594,21 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
         })
 
         if (!active) return
+        runSettledRef.current = true
+        if (requestedExitCodeRef.current !== undefined) {
+          exit(requestedExitCodeRef.current)
+          return
+        }
         dispatch({ type: 'done', result })
       } catch (error) {
         if (!active) return
+
+        runSettledRef.current = true
+        if (requestedExitCodeRef.current !== undefined && isAbortError(error)) {
+          exit(requestedExitCodeRef.current)
+          return
+        }
+
         dispatch({
           type: 'error',
           message: error instanceof Error ? error.message : String(error),
@@ -637,6 +692,12 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
   }, [internal_eventEmitter, streamHeight, wrappedOutputLines.length])
 
   useInput((_input, key) => {
+    const exitCode = getExitRequestCode(_input, key)
+    if (exitCode !== undefined) {
+      requestExit(exitCode)
+      return
+    }
+
     if (maxStreamScrollOffset === 0) return
 
     if (key.upArrow) {
@@ -731,6 +792,7 @@ export async function runDogfoodPipelineWithInk(
     patchConsole: false,
     maxFps: 20,
     incrementalRendering: false,
+    exitOnCtrlC: false,
   })
 
   try {

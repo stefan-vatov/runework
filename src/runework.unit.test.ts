@@ -17,6 +17,22 @@ test('root facade re-exports core types and functions', async () => {
   assert.equal('compareProviders' in mod, false)
 })
 
+test('root facade stays on public package surfaces instead of redundant internal re-exports', async () => {
+  const source = await readFile(new URL('./index.ts', import.meta.url), 'utf8')
+
+  assert.deepEqual(
+    source
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('export *')),
+    [
+      "export * from '@runework/core'",
+      "export * from '@runework/pipelines'",
+    ],
+  )
+})
+
 test('subpath exports resolve correctly', async () => {
   const adapters = await import('./adapters/index.ts')
   assert.equal(typeof adapters.getAdapter, 'function')
@@ -240,6 +256,15 @@ test('mouse wheel parser converts sgr mouse scroll sequences into viewport delta
     extractMouseWheelDelta('\u001B[<0;30;12M'),
     0,
   )
+})
+
+test('ink exit input mapper treats q and Ctrl+C as clean exits', async () => {
+  const { getExitRequestCode } = await import('../.runework/scripts/pipeline-ui.ts')
+
+  assert.equal(getExitRequestCode('q', {}), 0)
+  assert.equal(getExitRequestCode('c', { ctrl: true }), 0)
+  assert.equal(getExitRequestCode('q', { meta: true }), undefined)
+  assert.equal(getExitRequestCode('x', {}), undefined)
 })
 
 test('repo-local pipeline script uses source exports during development', async () => {
