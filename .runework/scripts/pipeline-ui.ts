@@ -399,7 +399,7 @@ function renderActiveJob(job: PipelineJobState | undefined, width: number) {
     h(Box, { width: 2 }, job ? renderStatusIndicator(job) : h(Text, { dimColor: true }, '·')),
     h(
       Text,
-      { wrap: 'truncate-end' },
+      { color: 'white', wrap: 'truncate-end' },
       wrapText(base, Math.max(1, width))[0] ?? '',
     ),
   )
@@ -411,7 +411,7 @@ function renderStreamBox(
   height: number,
 ) {
   const lines = buildStreamViewportLines(job?.output ?? [], width, height)
-  const borderColor = job?.status === 'failed' ? 'red' : 'gray'
+  const borderColor = job?.status === 'failed' ? 'red' : 'cyan'
 
   return h(
     Box,
@@ -435,7 +435,7 @@ function renderStreamBox(
             Text,
             {
               color: line.text
-                ? (line.stream === 'stderr' ? 'yellow' : 'gray')
+                ? (line.stream === 'stderr' ? 'red' : 'white')
                 : 'gray',
               dimColor: !line.text,
               wrap: 'truncate-end',

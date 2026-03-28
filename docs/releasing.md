@@ -5,23 +5,28 @@ This repo uses `nx release` for versioning, changelog generation, and git taggin
 Why this setup:
 
 - `runework` is the only public npm package in this workspace.
-- `packages/*` are private implementation details bundled into the root package.
-- Because the root package depends on those private packages through local `file:` references, release versioning needs to rewrite them to real semver versions before npm publishing.
+- `packages/core`, `packages/pipelines`, and `packages/cli` are private implementation packages bundled into the root package.
+- `packages/reporters` is adjacent private tooling kept out of the root runtime surface and out of release automation.
+- Because the root package depends on the bundled private packages through local `file:` references, release versioning needs to rewrite them to real semver versions before npm publishing.
 - Nx Release is already part of the workspace, so it fits better here than layering Changesets or semantic-release on top.
 
 ## What gets released
 
-The public root package and the private workspace packages participate in releases together.
+The public root package and the bundled private workspace packages participate in releases together.
 
 - Version sources:
   - root [`package.json`](../package.json)
   - [`packages/core/package.json`](../packages/core/package.json)
   - [`packages/pipelines/package.json`](../packages/pipelines/package.json)
   - [`packages/cli/package.json`](../packages/cli/package.json)
+- Explicitly excluded from release automation:
+  - [`packages/reporters/package.json`](../packages/reporters/package.json)
 - Git tag pattern: `v{version}`
 - Changelog: root `CHANGELOG.md`
 
-The private workspace packages are not independently published. They are versioned in lockstep so Nx can replace local dependency protocols with normal versions for npm-compatible publish manifests.
+The bundled private workspace packages are not independently published. They are versioned in lockstep so Nx can replace local dependency protocols with normal versions for npm-compatible publish manifests.
+
+`@runework/reporters` stays private and unbundled on purpose. It is validated in the workspace build, but it does not ship through the root runtime package and does not participate in `nx release`.
 
 ## Local release flow
 
