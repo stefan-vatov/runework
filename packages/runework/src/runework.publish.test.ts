@@ -76,6 +76,11 @@ test('npm publish dry-run succeeds without publish-time manifest corrections', a
       /\.(?:unit|integration|publish)\.test\.[cm]?[jt]s$/i,
       `packed runtime leaked internal test file: ${packedFile}`,
     )
+    assert.doesNotMatch(
+      packedFile,
+      /^\.runework\//,
+      `packed runtime leaked repo-local dogfood file: ${packedFile}`,
+    )
   }
 
   const expectedPackedFiles = [

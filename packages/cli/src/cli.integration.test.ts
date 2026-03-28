@@ -91,6 +91,25 @@ test('detectCommand emits structured JSON with provider capability surfaces', as
   })
 })
 
+test('detectCommand keeps provider capability differences visible in human-readable output', async () => {
+  const { code, output } = await captureConsole('log', () => detectCommand())
+  assert.ok(code === 0 || code === 1)
+
+  assert.match(output, /capabilities: /)
+  assert.match(
+    output,
+    /capabilities: approvalMode=yes files=no sandbox=yes schema=yes sessionName=no/,
+  )
+  assert.match(
+    output,
+    /capabilities: approvalMode=no files=no sandbox=no schema=yes sessionName=yes/,
+  )
+  assert.match(
+    output,
+    /capabilities: approvalMode=no files=yes sandbox=no schema=no sessionName=yes/,
+  )
+})
+
 test('runCommand keeps --json output structured when adapter resolution fails', async () => {
   const { code, output } = await captureConsole('log', () =>
     runCommand(['--json', 'unknown-provider', 'hello']),

@@ -69,7 +69,7 @@ test('package manifest keeps the published runtime on primitives', async () => {
   assert.doesNotMatch(packageJson.description ?? '', /\bcodex\b|\bclaude\b|\bopencode\b/i)
 })
 
-test('README keeps the public positioning library-first and direct-CLI friendly', async () => {
+test('README keeps the public positioning library-first, direct-CLI friendly, and agent-readable', async () => {
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8')
 
   assert.match(
@@ -77,6 +77,12 @@ test('README keeps the public positioning library-first and direct-CLI friendly'
     /If you only need a one-off prompt, call the provider CLI directly\./,
   )
   assert.match(readme, /## Thin CLI Utilities/)
+  assert.match(readme, /result\.command/)
+  assert.match(readme, /runework-run --json/)
+  assert.match(readme, /runework-detect --json/)
+  assert.match(readme, /runework-pipeline --json/)
+  assert.match(readme, /scaffolds an empty `?\.runework\/`? package/)
+  assert.match(readme, /Prompts, review loops, AGENTS files, and policy stay user-owned\./)
 
   const libraryUsageIndex = readme.indexOf('## Library Usage')
   const thinCliIndex = readme.indexOf('## Thin CLI Utilities')
