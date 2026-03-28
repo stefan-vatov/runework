@@ -23,6 +23,8 @@
     "test": "npm run test:unit && npm run test:integration && npm run test:publish",
     "test:unit": "node --conditions=source --test \"packages/*/src/*.unit.test.ts\"",
     "test:integration": "node --conditions=source --test \"packages/*/src/*.integration.test.ts\"",
+    "test:unit:ci": "node --conditions=source --test \"packages/cli/src/*.unit.test.ts\" \"packages/core/src/*.unit.test.ts\" \"packages/reporters/src/*.unit.test.ts\"",
+    "test:integration:ci": "node --conditions=source --test \"packages/cli/src/*.integration.test.ts\" \"packages/core/src/*.integration.test.ts\" \"packages/pipelines/src/*.integration.test.ts\"",
     "test:publish": "node --conditions=source --test \"packages/*/src/*.publish.test.ts\"",
     "typecheck": "tsc -b",
     "lint": "eslint .",
