@@ -7,7 +7,7 @@ Why this setup:
 - `runework` is the only public npm package in this workspace.
 - `packages/core`, `packages/pipelines`, and `packages/cli` are private implementation packages bundled into the root package.
 - `packages/reporters` is adjacent private tooling kept out of the root runtime surface and out of release automation.
-- Because the root package depends on the bundled private packages through local `file:` references, release versioning needs to rewrite them to real semver versions before npm publishing.
+- The root package already declares versioned dependencies on the bundled private workspace packages, so release automation only needs to keep those versions aligned and the publish manifest internally consistent.
 - Nx Release is already part of the workspace, so it fits better here than layering Changesets or semantic-release on top.
 
 ## What gets released
@@ -24,7 +24,7 @@ The public root package and the bundled private workspace packages participate i
 - Git tag pattern: `v{version}`
 - Changelog: root `CHANGELOG.md`
 
-The bundled private workspace packages are not independently published. They are versioned in lockstep so Nx can replace local dependency protocols with normal versions for npm-compatible publish manifests.
+The bundled private workspace packages are not independently published. They are versioned in lockstep so the workspace, the bundled tarball, and the published manifest stay internally consistent. `npm publish --dry-run` is expected to pass without publish-time manifest corrections.
 
 `@runework/reporters` stays private and unbundled on purpose. It is validated in the workspace build, but it does not ship through the root runtime package and does not participate in `nx release`.
 
