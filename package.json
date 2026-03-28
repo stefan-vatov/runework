@@ -4,7 +4,7 @@
   "version": "0.1.1",
   "type": "module",
   "license": "MIT",
-  "description": "zx-powered automation toolkit for CLI coding agents (codex, claude, opencode)",
+  "description": "thin zx runtime for durable AI CLI workflows across providers",
   "workspaces": [
     "packages/*"
   ],

@@ -7,6 +7,7 @@ export async function runCommand(argv: string[] = process.argv.slice(2)): Promis
   const usage = {
     command: 'runework-run',
     usage: 'runework-run [--json] <provider> "<prompt>"',
+    note: 'For one-off prompts, call the provider CLI directly. Use runework when you need journaling or a stable adapter contract.',
     examples: [
       'runework-run claude "explain this repo"',
       'runework-run codex "add error handling to src/index.ts"',
@@ -24,6 +25,7 @@ export async function runCommand(argv: string[] = process.argv.slice(2)): Promis
     }
 
     console.error(`Usage: ${usage.usage}`)
+    console.error(usage.note)
     for (const example of usage.examples) {
       console.error(`       ${example}`)
     }

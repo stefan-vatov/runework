@@ -47,7 +47,12 @@ test('runCommand returns 1 when no arguments provided', async () => {
   try {
     const code = await runCommand([])
     assert.equal(code, 1)
-    assert.match(errors.join('\n'), /Usage: runework-run \[--json\] <provider> "<prompt>"/)
+    const output = errors.join('\n')
+    assert.match(output, /Usage: runework-run \[--json\] <provider> "<prompt>"/)
+    assert.match(
+      output,
+      /For one-off prompts, call the provider CLI directly\. Use runework when you need journaling or a stable adapter contract\./,
+    )
   } finally {
     console.error = originalError
   }

@@ -37,6 +37,7 @@ test('package manifest keeps the published runtime on primitives', async () => {
   ) as {
     bundleDependencies?: string[]
     dependencies?: Record<string, string>
+    description?: string
     exports?: Record<string, unknown>
   }
 
@@ -45,6 +46,30 @@ test('package manifest keeps the published runtime on primitives', async () => {
   assert.equal(
     packageJson.bundleDependencies?.includes('@runework/reporters') ?? false,
     false,
+  )
+  assert.match(packageJson.description ?? '', /\bthin\b/i)
+  assert.match(packageJson.description ?? '', /\bruntime\b/i)
+  assert.doesNotMatch(packageJson.description ?? '', /\bautomation toolkit\b/i)
+  assert.doesNotMatch(packageJson.description ?? '', /\bcodex\b|\bclaude\b|\bopencode\b/i)
+})
+
+test('README keeps the public positioning library-first and direct-CLI friendly', async () => {
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8')
+
+  assert.match(
+    readme,
+    /If you only need a one-off prompt, call the provider CLI directly\./,
+  )
+  assert.match(readme, /## Thin CLI Utilities/)
+
+  const libraryUsageIndex = readme.indexOf('## Library Usage')
+  const thinCliIndex = readme.indexOf('## Thin CLI Utilities')
+
+  assert.ok(libraryUsageIndex >= 0, 'README should document library usage')
+  assert.ok(thinCliIndex >= 0, 'README should document the thin CLI utilities')
+  assert.ok(
+    libraryUsageIndex < thinCliIndex,
+    'README should present library usage before thin CLI utilities',
   )
 })
 

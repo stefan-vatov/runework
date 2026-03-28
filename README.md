@@ -9,13 +9,49 @@ npm install
 npm test
 ```
 
-Install any wrapped CLIs separately:
+Install the provider CLIs you want to use separately. Current built-in adapters:
 
 - `codex`
 - `claude`
 - `opencode`
 
-## CLI
+If you only need a one-off prompt, call the provider CLI directly. `runework` earns the extra layer when you need durable steps, resumable pipelines, provider composition, or a stable adapter contract.
+
+## Library Usage
+
+```ts
+import { getAdapter } from 'runework'
+
+const codex = getAdapter('codex')
+
+const result = await codex.run({
+  prompt: 'Summarize this repository',
+  cwd: process.cwd(),
+})
+```
+
+Each adapter result includes `result.command` with the exact `bin`, `args`, and `cwd` used for the underlying CLI invocation.
+
+Provider-specific flags should go through `extraArgs`. Shared request fields stay limited to what the underlying adapter actually supports.
+
+For durable local workflows, author your own pipeline files:
+
+```ts
+import { defineWorkflowPipeline } from 'runework/pipelines'
+
+export default defineWorkflowPipeline({
+  version: 1,
+  async run(ctx) {
+    const summary = await ctx.step('summary', async () => 'ready')
+    const outputPath = await ctx.writeOutput('summary.txt', summary)
+    return { ok: true, outputPath, summary: 'pipeline complete' }
+  },
+})
+```
+
+## Thin CLI Utilities
+
+`runework-run` stays thin. Use it for scripting, journaling, or adapter diagnostics when the provider CLI alone is not enough.
 
 Single-provider run:
 
@@ -64,38 +100,6 @@ npx runework-pipeline --json my-pipeline
 All adapter runs are journaled into `.runework/.work/runs/` when your scripts or pipelines call `writeJournal()`.
 
 From a source checkout of this repo, the equivalent development commands are `npm run run -- ...`, `npm run detect`, `npm run detect -- --json`, and `node --conditions=source src/cli/init.ts`.
-
-## Library Usage
-
-```ts
-import { getAdapter } from 'runework'
-
-const codex = getAdapter('codex')
-
-const result = await codex.run({
-  prompt: 'Summarize this repository',
-  cwd: process.cwd(),
-})
-```
-
-Each adapter result includes `result.command` with the exact `bin`, `args`, and `cwd` used for the underlying CLI invocation.
-
-Provider-specific flags should go through `extraArgs`. Shared request fields stay limited to what the underlying adapter actually supports.
-
-For durable local workflows, author your own pipeline files:
-
-```ts
-import { defineWorkflowPipeline } from 'runework/pipelines'
-
-export default defineWorkflowPipeline({
-  version: 1,
-  async run(ctx) {
-    const summary = await ctx.step('summary', async () => 'ready')
-    const outputPath = await ctx.writeOutput('summary.txt', summary)
-    return { ok: true, outputPath, summary: 'pipeline complete' }
-  },
-})
-```
 
 ## Scaffold
 

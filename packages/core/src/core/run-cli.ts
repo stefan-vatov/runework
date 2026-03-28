@@ -51,7 +51,6 @@ function resolveShellPath(): string | true {
     '/opt/homebrew/bin/bash',
     '/bin/bash',
     '/usr/bin/bash',
-    process.env.SHELL,
     '/bin/sh',
     '/usr/bin/sh',
   ]
@@ -77,7 +76,10 @@ function resolveShellOptions(): {
 
   return {
     shell,
-    prefix: 'set -euo pipefail;',
+    // runCli only emits a single CLI command, so a POSIX-safe `set -eu` keeps
+    // execution deterministic across bash/sh environments without depending on
+    // the caller's interactive shell features.
+    prefix: 'set -eu;',
     postfix: '',
     quote,
   }
