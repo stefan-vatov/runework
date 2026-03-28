@@ -67,6 +67,34 @@ test('workspace build graph validates adjacent reporter tooling without exportin
   assert.ok(workspaceRefs.includes('packages/reporters/tsconfig.build.json'))
 })
 
+test('release config only targets real Nx projects', async () => {
+  const nxJson = JSON.parse(
+    await readFile(new URL('../nx.json', import.meta.url), 'utf8'),
+  ) as {
+    release?: { projects?: string[] }
+  }
+
+  const knownProjects = new Set(
+    (await Promise.all([
+      '../project.json',
+      '../packages/core/project.json',
+      '../packages/pipelines/project.json',
+      '../packages/cli/project.json',
+      '../packages/reporters/project.json',
+    ].map(async (path) => {
+      const projectJson = JSON.parse(
+        await readFile(new URL(path, import.meta.url), 'utf8'),
+      ) as { name?: string }
+      return projectJson.name
+    }))).filter((name): name is string => Boolean(name)),
+  )
+
+  const unknownReleaseProjects = (nxJson.release?.projects ?? [])
+    .filter((name) => !knownProjects.has(name))
+
+  assert.deepEqual(unknownReleaseProjects, [])
+})
+
 test('CLI helpers re-export from @runework/cli', async () => {
   const helpers = await import('./cli/helpers.ts')
   assert.equal(typeof helpers.resolveRuneworkDir, 'function')
@@ -119,6 +147,40 @@ test('dogfood stream reporter emits an immediate startup line and readable provi
       },
     ],
   )
+})
+
+test('stream viewport wraps commentary and collapses repeated stderr noise', async () => {
+  const { buildStreamViewportLines } = await import('../.runework/scripts/pipeline-ui.ts')
+
+  const lines = buildStreamViewportLines(
+    [
+      {
+        stream: 'stderr',
+        text: '2026-03-28T14:05:21.647492Z ERROR loader failed',
+      },
+      {
+        stream: 'stderr',
+        text: '2026-03-28T14:05:21.647908Z ERROR loader failed',
+      },
+      {
+        stream: 'stderr',
+        text: '2026-03-28T14:05:21.648068Z ERROR loader failed',
+      },
+      {
+        stream: 'stdout',
+        text: 'This commentary should wrap across multiple viewport rows cleanly.',
+      },
+    ],
+    26,
+    10,
+  ).map((line) => line.text).filter((line) => line.trim())
+
+  assert.deepEqual(lines, [
+    '! ERROR loader failed [x3]',
+    '› This commentary should',
+    '  wrap across multiple',
+    '  viewport rows cleanly.',
+  ])
 })
 
 test('repo-local pipeline script uses source exports during development', async () => {

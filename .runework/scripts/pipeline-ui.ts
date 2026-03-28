@@ -1,6 +1,5 @@
-import { createElement, useEffect, useReducer, useState } from 'react'
-import { Box, Text, render, useApp } from 'ink'
-import Spinner from 'ink-spinner'
+import { createElement, useEffect, useReducer } from 'react'
+import { Box, Text, render, useApp, useStdout } from 'ink'
 import { runPipeline, type PipelineResult } from 'runework/pipelines'
 import type {
   DogfoodJobProgressEvent,
@@ -17,12 +16,12 @@ type RunDogfoodPipelineOptions = {
   resumeRunId?: string
 }
 
-type PipelineLogEntry = {
-  id: number
-  message: string
+type PipelineOutputLine = {
+  stream: 'stdout' | 'stderr'
+  text: string
 }
 
-type PipelineOutputLine = {
+type PipelineViewportLine = {
   stream: 'stdout' | 'stderr'
   text: string
 }
@@ -45,24 +44,21 @@ type PipelineUiState = {
   subtitle?: string
   runId?: string
   resumed: boolean
-  startedAt: number
-  nextLogId: number
   jobs: Record<string, PipelineJobState>
-  logs: PipelineLogEntry[]
   result?: PipelineResult
   exitCode?: number
   error?: string
 }
 
 type PipelineUiAction =
-  | { type: 'log'; message: string }
   | { type: 'progress'; event: DogfoodProgressEvent }
   | { type: 'done'; result: PipelineResult }
   | { type: 'error'; message: string }
 
-const MAX_LOG_ENTRIES = 8
-const MAX_OUTPUT_LINES = 4
+const MAX_OUTPUT_LINES = 200
 const h = createElement
+const MIN_STREAM_HEIGHT = 10
+const RESERVED_SCREEN_LINES = 8
 
 function humanizePipelineName(name: string): string {
   return name
@@ -84,22 +80,6 @@ function isDogfoodProgressEvent(event: unknown): event is DogfoodProgressEvent {
 
 function trimOutput(lines: PipelineOutputLine[]): PipelineOutputLine[] {
   return lines.slice(-MAX_OUTPUT_LINES)
-}
-
-function trimLogs(logs: PipelineLogEntry[]): PipelineLogEntry[] {
-  return logs.slice(-MAX_LOG_ENTRIES)
-}
-
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
-
-function formatOutputCount(jobs: PipelineJobState[]): string {
-  const outputJobCount = jobs.filter((job) => job.output.length > 0).length
-  return `${outputJobCount} stream${outputJobCount === 1 ? '' : 's'}`
 }
 
 function jobStatusColor(status: DogfoodJobStatus): string {
@@ -131,33 +111,156 @@ function jobStatusLabel(status: DogfoodJobStatus): string {
   }
 }
 
-function summarizeCounts(jobs: PipelineJobState[]): {
-  running: number
-  success: number
-  failed: number
-} {
-  return jobs.reduce(
-    (counts, job) => {
-      if (job.status === 'running') counts.running += 1
-      if (job.status === 'success') counts.success += 1
-      if (job.status === 'failed') counts.failed += 1
-      return counts
-    },
-    { running: 0, success: 0, failed: 0 },
+function stripLeadingTimestamp(text: string): string {
+  return text.replace(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s+/,
+    '',
   )
+}
+
+function collapseRepeatedOutputLines(lines: PipelineOutputLine[]): PipelineOutputLine[] {
+  const collapsed: PipelineOutputLine[] = []
+  let pendingError:
+    | {
+      key: string
+      text: string
+      count: number
+    }
+    | undefined
+
+  const flushPendingError = () => {
+    if (!pendingError) return
+
+    collapsed.push({
+      stream: 'stderr',
+      text: pendingError.count > 1
+        ? `${pendingError.text} [x${pendingError.count}]`
+        : pendingError.text,
+    })
+    pendingError = undefined
+  }
+
+  for (const line of lines) {
+    if (line.stream !== 'stderr') {
+      flushPendingError()
+      collapsed.push(line)
+      continue
+    }
+
+    const normalized = stripLeadingTimestamp(line.text).trim()
+    if (!normalized) continue
+
+    if (pendingError?.key === normalized) {
+      pendingError.count += 1
+      continue
+    }
+
+    flushPendingError()
+    pendingError = {
+      key: normalized,
+      text: normalized,
+      count: 1,
+    }
+  }
+
+  flushPendingError()
+  return collapsed
+}
+
+function wrapText(text: string, width: number): string[] {
+  if (width <= 0) return []
+
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) return ['']
+
+  const lines: string[] = []
+  let current = ''
+
+  const pushSegment = (segment: string) => {
+    if (Array.from(segment).length <= width) {
+      if (!current) {
+        current = segment
+        return
+      }
+
+      const candidate = `${current} ${segment}`
+      if (Array.from(candidate).length <= width) {
+        current = candidate
+        return
+      }
+
+      lines.push(current)
+      current = segment
+      return
+    }
+
+    if (current) {
+      lines.push(current)
+      current = ''
+    }
+
+    const chars = Array.from(segment)
+    for (let index = 0; index < chars.length; index += width) {
+      lines.push(chars.slice(index, index + width).join(''))
+    }
+  }
+
+  for (const segment of normalized.split(' ')) {
+    pushSegment(segment)
+  }
+
+  if (current) lines.push(current)
+  return lines
+}
+
+function wrapOutputLine(
+  line: PipelineOutputLine,
+  width: number,
+): PipelineViewportLine[] {
+  const firstPrefix = line.stream === 'stderr' ? '! ' : '› '
+  const continuationPrefix = '  '
+  const firstWidth = Math.max(1, width - Array.from(firstPrefix).length)
+  const continuationWidth = Math.max(1, width - Array.from(continuationPrefix).length)
+
+  const wrapped = wrapText(line.text, firstWidth)
+  if (wrapped.length === 0) {
+    return [{ stream: line.stream, text: firstPrefix.trimEnd() }]
+  }
+
+  return wrapped.flatMap((segment, index) => {
+    if (index === 0) {
+      return [{ stream: line.stream, text: `${firstPrefix}${segment}` }]
+    }
+
+    return wrapText(segment, continuationWidth).map((continued) => ({
+      stream: line.stream,
+      text: `${continuationPrefix}${continued}`,
+    }))
+  })
+}
+
+export function buildStreamViewportLines(
+  lines: PipelineOutputLine[],
+  width: number,
+  height: number,
+): PipelineViewportLine[] {
+  const wrapped = collapseRepeatedOutputLines(lines)
+    .flatMap((line) => wrapOutputLine(line, Math.max(1, width)))
+
+  if (height <= 0) return []
+  if (wrapped.length >= height) return wrapped.slice(-height)
+
+  return [
+    ...Array.from({ length: height - wrapped.length }, () => ({
+      stream: 'stdout' as const,
+      text: '',
+    })),
+    ...wrapped,
+  ]
 }
 
 function uiReducer(state: PipelineUiState, action: PipelineUiAction): PipelineUiState {
   switch (action.type) {
-    case 'log':
-      return {
-        ...state,
-        nextLogId: state.nextLogId + 1,
-        logs: trimLogs([
-          ...state.logs,
-          { id: state.nextLogId, message: action.message },
-        ]),
-      }
     case 'progress':
       return applyProgressEvent(state, action.event)
     case 'done':
@@ -260,17 +363,14 @@ function createInitialState(pipelineName: string): PipelineUiState {
   return {
     pipelineName,
     title: humanizePipelineName(pipelineName),
-    startedAt: Date.now(),
-    nextLogId: 1,
     jobs: {},
-    logs: [],
     resumed: false,
   }
 }
 
 function renderStatusIndicator(job: PipelineJobState) {
   if (job.status === 'running') {
-    return h(Spinner, { type: 'dots' })
+    return h(Text, { color: 'cyan' }, '›')
   }
 
   const symbol = job.status === 'success'
@@ -282,78 +382,68 @@ function renderStatusIndicator(job: PipelineJobState) {
   return h(Text, { color: jobStatusColor(job.status) }, symbol)
 }
 
-function renderJob(job: PipelineJobState) {
-  const outputLines = job.status === 'running' || job.status === 'failed'
-    ? job.output
-    : []
-  const showPendingOutputHint = job.status === 'running'
-    && outputLines.length === 0
-    && Boolean(job.provider)
+function getPrimaryJob(jobs: PipelineJobState[]): PipelineJobState | undefined {
+  return jobs.find((job) => job.status === 'running')
+    ?? [...jobs].reverse().find((job) => job.output.length > 0)
+    ?? jobs[jobs.length - 1]
+}
+
+function renderActiveJob(job: PipelineJobState | undefined, width: number) {
+  const base = job
+    ? `${job.group} · ${job.label}${job.detail ? `  ${job.detail}` : ''}`
+    : 'waiting to start...'
 
   return h(
     Box,
-    { key: job.id, flexDirection: 'column', marginLeft: 2, marginBottom: 1 },
+    { marginBottom: 1 },
+    h(Box, { width: 2 }, job ? renderStatusIndicator(job) : h(Text, { dimColor: true }, '·')),
+    h(
+      Text,
+      { wrap: 'truncate-end' },
+      wrapText(base, Math.max(1, width))[0] ?? '',
+    ),
+  )
+}
+
+function renderStreamBox(
+  job: PipelineJobState | undefined,
+  width: number,
+  height: number,
+) {
+  const lines = buildStreamViewportLines(job?.output ?? [], width, height)
+  const borderColor = job?.status === 'failed' ? 'red' : 'gray'
+
+  return h(
+    Box,
+    { flexDirection: 'column' },
+    h(Text, { color: 'cyan', bold: true }, 'stream'),
     h(
       Box,
-      {},
-      h(Box, { width: 2 }, renderStatusIndicator(job)),
-      h(
-        Text,
-        { wrap: 'truncate-end' },
-        `${job.label} `,
-        h(Text, { color: jobStatusColor(job.status), bold: job.status === 'failed' }, jobStatusLabel(job.status)),
-        job.detail ? h(Text, { dimColor: true }, `  ${job.detail}`) : null,
-      ),
+      {
+        borderStyle: 'round',
+        borderColor,
+        flexDirection: 'column',
+        paddingX: 1,
+        paddingY: 0,
+        height: height + 2,
+      },
+      ...lines.map((line, index) =>
+        h(
+          Box,
+          { key: `${job?.id ?? 'stream'}:${line.stream}:${index}`, height: 1 },
+          h(
+            Text,
+            {
+              color: line.text
+                ? (line.stream === 'stderr' ? 'yellow' : 'gray')
+                : 'gray',
+              dimColor: !line.text,
+              wrap: 'truncate-end',
+            },
+            line.text || ' ',
+          ),
+        )),
     ),
-    showPendingOutputHint
-      ? h(
-        Box,
-        { marginLeft: 2 },
-        h(
-          Text,
-          { color: 'gray', dimColor: true, wrap: 'truncate-end' },
-          `… waiting for first readable ${job.provider} event`,
-        ),
-      )
-      : null,
-    ...outputLines.map((line, index) =>
-      h(
-        Box,
-        { key: `${job.id}:${line.stream}:${index}`, marginLeft: 2 },
-        h(
-          Text,
-          {
-            color: line.stream === 'stderr' ? 'yellow' : 'gray',
-            wrap: 'truncate-end',
-          },
-          `${line.stream === 'stderr' ? '!' : '›'} ${line.text}`,
-        ),
-      )),
-  )
-}
-
-function renderGroup(group: string, jobs: PipelineJobState[]) {
-  return h(
-    Box,
-    { key: group, flexDirection: 'column', marginBottom: 1 },
-    h(Text, { color: 'cyan', bold: true }, group),
-    ...jobs.map((job) => renderJob(job)),
-  )
-}
-
-function renderLogs(logs: PipelineLogEntry[]) {
-  if (logs.length === 0) return null
-
-  return h(
-    Box,
-    { flexDirection: 'column', marginTop: 1 },
-    h(Text, { color: 'cyan', bold: true }, 'notes'),
-    ...logs.map((entry) =>
-      h(
-        Box,
-        { key: entry.id, marginLeft: 2 },
-        h(Text, { dimColor: true, wrap: 'truncate-end' }, `• ${entry.message}`),
-      )),
   )
 }
 
@@ -389,16 +479,8 @@ function formatPlainOutputEvent(
 
 function PipelineApp(props: RunDogfoodPipelineOptions) {
   const { exit } = useApp()
-  const [now, setNow] = useState(() => Date.now())
+  const { stdout } = useStdout()
   const [state, dispatch] = useReducer(uiReducer, createInitialState(props.pipelineName))
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setNow(Date.now())
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [])
 
   useEffect(() => {
     let active = true
@@ -408,9 +490,7 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
         const result = await runPipeline(props.pipelineName, props.runeworkDir, {
           options: props.pipelineOptions,
           resumeRunId: props.resumeRunId,
-          log: (message) => {
-            if (active) dispatch({ type: 'log', message })
-          },
+          log: () => {},
           onProgress: (event) => {
             if (active && isDogfoodProgressEvent(event)) {
               dispatch({ type: 'progress', event })
@@ -453,14 +533,14 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
     return left.label.localeCompare(right.label)
   })
 
-  const groupedJobs = jobs.reduce<Record<string, PipelineJobState[]>>((groups, job) => {
-    groups[job.group] ??= []
-    groups[job.group].push(job)
-    return groups
-  }, {})
-
-  const counts = summarizeCounts(jobs)
-  const elapsed = formatElapsed(now - state.startedAt)
+  const primaryJob = getPrimaryJob(jobs)
+  const columns = stdout.columns ?? process.stdout.columns ?? 80
+  const rows = stdout.rows ?? process.stdout.rows ?? 24
+  const contentWidth = Math.max(20, columns - 4)
+  const streamHeight = Math.max(
+    MIN_STREAM_HEIGHT,
+    rows - RESERVED_SCREEN_LINES,
+  )
   const headerStatus = state.error
     ? h(Text, { color: 'red', bold: true }, 'failed')
     : state.result
@@ -472,30 +552,20 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
     { flexDirection: 'column' },
     h(
       Box,
-      { marginBottom: 1 },
+      { marginBottom: 0 },
       h(Text, { bold: true }, state.title),
       h(Text, {}, '  '),
       headerStatus,
-      h(Text, { dimColor: true }, `  ${elapsed}`),
-      state.runId ? h(Text, { dimColor: true }, `  run ${state.runId}`) : null,
+      h(Text, { dimColor: true }, `  run ${state.runId ?? 'starting...'}`),
       state.resumed ? h(Text, { color: 'yellow' }, '  resumed') : null,
     ),
-    state.subtitle
-      ? h(Text, { dimColor: true, wrap: 'truncate-end' }, state.subtitle)
-      : null,
     h(
-      Box,
-      { marginBottom: 1 },
-      h(Text, { color: 'cyan' }, `${counts.running} running`),
-      h(Text, { dimColor: true }, '  •  '),
-      h(Text, { color: 'green' }, `${counts.success} done`),
-      h(Text, { dimColor: true }, '  •  '),
-      h(Text, { color: counts.failed > 0 ? 'red' : 'gray' }, `${counts.failed} failed`),
-      h(Text, { dimColor: true }, '  •  '),
-      h(Text, { dimColor: true }, formatOutputCount(jobs)),
+      Text,
+      { dimColor: true, wrap: 'truncate-end' },
+      wrapText(state.subtitle ?? ' ', Math.max(1, columns))[0] ?? ' ',
     ),
-    ...Object.entries(groupedJobs).map(([group, groupJobs]) => renderGroup(group, groupJobs)),
-    renderLogs(state.logs),
+    renderActiveJob(primaryJob, contentWidth),
+    renderStreamBox(primaryJob, contentWidth, streamHeight),
     state.result
       ? h(
         Box,
@@ -520,7 +590,7 @@ export async function runDogfoodPipelineWithInk(
   const instance = render(h(PipelineApp, options), {
     patchConsole: false,
     maxFps: 20,
-    incrementalRendering: true,
+    incrementalRendering: false,
   })
 
   try {

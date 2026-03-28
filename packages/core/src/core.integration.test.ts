@@ -7,6 +7,7 @@ import test from 'node:test'
 import { ClaudeAdapter } from './adapters/claude.ts'
 import { CodexAdapter } from './adapters/codex.ts'
 import { OpenCodeAdapter } from './adapters/opencode.ts'
+import { getAdapters } from './adapters/registry.ts'
 import type { AgentOutputChunk } from './adapters/types.ts'
 import { detectTools } from './core/detect.ts'
 import { runCli, type CliOutputChunk } from './core/run-cli.ts'
@@ -99,6 +100,18 @@ test('runCli aborts promptly and preserves the callback error when streaming fai
   )
 })
 
+test('runCli preserves spawn failures when the process never starts', async () => {
+  const result = await runCli({
+    bin: 'runework-missing-bin-for-test',
+    env: { PATH: '' },
+  })
+
+  assert.equal(result.ok, false)
+  assert.notEqual(result.exitCode, 0)
+  assert.doesNotMatch(result.stderr, /Cannot read properties of undefined/)
+  assert.match(result.stderr, /runework-missing-bin-for-test|ENOENT|spawn|not found/i)
+})
+
 test('detectTools resolves executables from PATH without relying on locator binaries', async (t) => {
   const fake = await createFakeCli(
     t,
@@ -138,6 +151,21 @@ test('detectTools resolves executables from PATH without relying on locator bina
   })
 })
 
+test('detectTools defaults stay aligned with the adapter registry', async (t) => {
+  const previousPath = process.env.PATH
+  process.env.PATH = ''
+  t.after(() => {
+    process.env.PATH = previousPath
+  })
+
+  const detected = await detectTools()
+
+  assert.deepEqual(
+    detected.map((tool) => tool.name).sort(),
+    getAdapters().map((adapter) => adapter.name).sort(),
+  )
+})
+
 test('ClaudeAdapter streams realtime CLI output through the shared adapter contract', async (t) => {
   const fake = await createFakeCli(
     t,
@@ -169,6 +197,20 @@ test('ClaudeAdapter streams realtime CLI output through the shared adapter contr
   })
 
   assert.equal(result.ok, true)
+  assert.deepEqual(result.command, {
+    bin: 'claude',
+    args: [
+      '-p',
+      '--input-format',
+      'text',
+      '--output-format',
+      'stream-json',
+      '--include-partial-messages',
+      '--json-schema',
+      JSON.stringify({ type: 'object' }),
+    ],
+    cwd: process.cwd(),
+  })
   assert.equal(result.text, 'streamed claude result')
   assert.deepEqual(result.structured, { ok: true })
   assert.equal(result.sessionId, 'claude-session')
@@ -213,6 +255,16 @@ test('ClaudeAdapter preserves streamed partial text when the run exits before a 
   })
 
   assert.equal(result.ok, false)
+  assert.equal(result.command.bin, 'claude')
+  assert.equal(result.command.cwd, process.cwd())
+  assert.deepEqual(result.command.args, [
+    '-p',
+    '--input-format',
+    'text',
+    '--output-format',
+    'stream-json',
+    '--include-partial-messages',
+  ])
   assert.equal(result.text, 'partial-result')
   assert.deepEqual(result.rawEvents, [
     { type: 'assistant', delta: 'partial-' },
@@ -246,11 +298,28 @@ test('CodexAdapter streams JSONL output and still returns the parsed final messa
   const chunks: AgentOutputChunk[] = []
   const result = await new CodexAdapter().run({
     prompt: 'Stream codex',
+    approvalMode: 'never',
+    sandbox: 'workspace-write',
+    cwd: process.cwd(),
     env: { PATH: fake.pathEnv },
     onOutputChunk: (chunk) => chunks.push(chunk),
   })
 
   assert.equal(result.ok, true)
+  assert.equal(result.command.bin, 'codex')
+  assert.equal(result.command.cwd, process.cwd())
+  assert.deepEqual(result.command.args.slice(0, 7), [
+    '-a',
+    'never',
+    'exec',
+    '-C',
+    process.cwd(),
+    '-s',
+    'workspace-write',
+  ])
+  assert.ok(result.command.args.includes('--json'))
+  assert.ok(result.command.args.includes('--output-last-message'))
+  assert.equal(result.command.args.at(-1), '-')
   assert.equal(result.text, 'final codex message')
   assert.equal(result.sessionId, 'codex-session')
   assert.deepEqual(result.rawEvents, [
@@ -286,11 +355,17 @@ test('OpenCodeAdapter streams JSON output and still extracts the assistant text'
   const chunks: AgentOutputChunk[] = []
   const result = await new OpenCodeAdapter().run({
     prompt: 'Stream opencode',
+    cwd: process.cwd(),
     env: { PATH: fake.pathEnv },
     onOutputChunk: (chunk) => chunks.push(chunk),
   })
 
   assert.equal(result.ok, true)
+  assert.deepEqual(result.command, {
+    bin: 'opencode',
+    args: ['run', '--format', 'json', '--dir', process.cwd()],
+    cwd: process.cwd(),
+  })
   assert.equal(result.text, 'hello world')
   assert.deepEqual(result.rawEvents, [
     { type: 'text', part: { text: 'hello ' } },

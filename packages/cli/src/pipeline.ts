@@ -4,7 +4,7 @@ import {
   PipelineRunError,
   type PipelineProgressEvent,
 } from '@runework/pipelines'
-import { resolveRuneworkDir } from './helpers.ts'
+import { consumeFlag, resolveRuneworkDir } from './helpers.ts'
 
 function parseOptions(args: string[]): {
   pipelineOptions: Record<string, unknown>
@@ -48,12 +48,27 @@ function formatProgressEvent(event: PipelineProgressEvent): string {
 }
 
 export async function pipelineCommand(argv: string[] = process.argv.slice(2)): Promise<number> {
-  const [pipelineName, ...rest] = argv
+  const { enabled: jsonMode, rest: args } = consumeFlag(argv, '--json')
+  const [pipelineName, ...rest] = args
   const runeworkDir = resolveRuneworkDir()
+  const usage = {
+    command: 'runework-pipeline',
+    usage: 'runework-pipeline [--json] <pipeline-name> [--resume-run <run-id>] [--key value...]',
+  }
 
   if (!pipelineName) {
     const available = await listPipelines(runeworkDir)
-    console.error('Usage: runework-pipeline <pipeline-name> [--resume-run <run-id>] [--key value...]')
+    if (jsonMode) {
+      console.log(JSON.stringify({
+        ok: false,
+        error: 'pipeline name is required',
+        ...usage,
+        availablePipelines: available,
+      }, null, 2))
+      return 1
+    }
+
+    console.error(`Usage: ${usage.usage}`)
     if (available.length > 0) {
       console.error(`\nAvailable pipelines: ${available.join(', ')}`)
     } else {
@@ -62,19 +77,28 @@ export async function pipelineCommand(argv: string[] = process.argv.slice(2)): P
     return 1
   }
 
-  const { pipelineOptions, resumeRunId } = parseOptions(rest)
-
   try {
+    const { pipelineOptions, resumeRunId } = parseOptions(rest)
     const result = await runPipeline(pipelineName, runeworkDir, {
       options: pipelineOptions,
       resumeRunId,
       log: (message) => {
+        if (jsonMode) {
+          console.error(JSON.stringify({ type: 'log', message }))
+          return
+        }
+
         console.error(message)
       },
       onProgress: (event) => {
         console.error(formatProgressEvent(event))
       },
     })
+    if (jsonMode) {
+      console.log(JSON.stringify(result, null, 2))
+      return result.ok ? 0 : 1
+    }
+
     console.error(result.summary)
     if (result.runId) {
       console.error(`run: ${result.runId}`)
@@ -91,6 +115,29 @@ export async function pipelineCommand(argv: string[] = process.argv.slice(2)): P
       : err instanceof Error
         ? err.message
         : String(err)
+    if (jsonMode) {
+      console.log(JSON.stringify(
+        err instanceof PipelineRunError
+          ? {
+            ok: false,
+            error: message,
+            pipelineName: err.pipelineName,
+            runId: err.runId,
+            outputDir: err.outputDir,
+            ...usage,
+          }
+          : {
+            ok: false,
+            error: message,
+            pipelineName,
+            ...usage,
+          },
+        null,
+        2,
+      ))
+      return 1
+    }
+
     console.error(`Error: ${message}`)
     return 1
   }

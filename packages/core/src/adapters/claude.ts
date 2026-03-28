@@ -165,6 +165,11 @@ export class ClaudeAdapter implements AgentAdapter {
       provider: this.name,
       ok: cli.ok,
       exitCode: cli.exitCode,
+      command: {
+        bin: cli.bin,
+        args: cli.args,
+        cwd: cli.cwd,
+      },
       text: (toText(parsed?.result).trim() || partialText || cli.stdout.trim()),
       structured: parsed?.structured_output,
       sessionId: parsed?.session_id,

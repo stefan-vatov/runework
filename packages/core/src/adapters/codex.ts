@@ -63,37 +63,43 @@ export function buildCodexArgs(
   files: CodexArgFiles,
 ): string[] {
   assertSupportedRequestOptions('codex', request, CODEX_CAPABILITIES)
+  if (request.schema && request.resume) {
+    throw new Error(
+      'codex does not support request option(s): schema when resuming exec sessions. Pass provider-specific CLI flags via extraArgs instead.',
+    )
+  }
 
   const args: string[] = []
 
-  if (request.cwd) args.push('-C', request.cwd)
-  if (request.sandbox) args.push('-s', request.sandbox)
+  // Codex keeps approval policy on the top-level parser even for `exec`.
   if (request.approvalMode) args.push('-a', request.approvalMode)
 
-  args.push('exec')
+  const execArgs: string[] = ['exec']
+
+  if (request.cwd) execArgs.push('-C', request.cwd)
+  if (request.sandbox) execArgs.push('-s', request.sandbox)
 
   if (files.schemaFile) {
-    args.push('--output-schema', files.schemaFile)
+    execArgs.push('--output-schema', files.schemaFile)
   }
 
+  if (request.model) execArgs.push('-m', request.model)
+  execArgs.push('--json', '--output-last-message', files.outputFile)
+  if (request.extraArgs?.length) execArgs.push(...request.extraArgs)
+
   if (request.resume?.sessionId || request.resume?.last) {
-    args.push('resume')
+    execArgs.push('resume')
 
     if (request.resume.sessionId) {
-      args.push(request.resume.sessionId)
+      execArgs.push(request.resume.sessionId)
     } else {
-      args.push('--last')
+      execArgs.push('--last')
     }
   }
 
-  if (request.model) args.push('-m', request.model)
-  args.push('--json', '--output-last-message', files.outputFile)
+  execArgs.push('-')
 
-  if (request.extraArgs?.length) args.push(...request.extraArgs)
-
-  args.push('-')
-
-  return args
+  return args.concat(execArgs)
 }
 
 /**
@@ -142,6 +148,11 @@ export class CodexAdapter implements AgentAdapter {
         provider: this.name,
         ok: cli.ok,
         exitCode: cli.exitCode,
+        command: {
+          bin: cli.bin,
+          args: cli.args,
+          cwd: cli.cwd,
+        },
         text,
         structured,
         sessionId: extractSessionId(rawEvents),

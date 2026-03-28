@@ -4,6 +4,7 @@ export { pipelineCommand } from './pipeline.ts'
 export { initCommand } from './init.ts'
 export type { InitDeps } from './init.ts'
 export {
+  consumeFlag,
   resolveRuneworkDir,
   runResultExitCode,
   defaultRuneworkDependency,

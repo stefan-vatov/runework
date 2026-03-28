@@ -4,7 +4,6 @@
     "projects": [
       "runework",
       "runework-core",
-      "runework-workflows",
       "runework-pipelines",
       "runework-cli"
     ],

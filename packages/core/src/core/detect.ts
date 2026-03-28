@@ -2,6 +2,7 @@ import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { delimiter, extname, join } from 'node:path'
 
+import { getAdapters } from '../adapters/registry.ts'
 import { runCli } from './run-cli.ts'
 
 export type ToolInfo = {
@@ -75,7 +76,7 @@ async function resolveToolPath(name: string): Promise<string | undefined> {
  * Useful for picking adapters at runtime or for diagnostics.
  */
 export async function detectTools(
-  names = ['codex', 'claude', 'opencode'],
+  names = getAdapters().map((adapter) => adapter.name),
 ): Promise<ToolInfo[]> {
   return Promise.all(
     names.map(async (name): Promise<ToolInfo> => {

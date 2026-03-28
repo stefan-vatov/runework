@@ -131,7 +131,7 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
   console.error('    tsconfig.json       IDE support')
   console.error('    scripts/            user-authored scripts')
   console.error('    pipelines/          user-authored durable pipelines')
-  console.error('    .work/              all output (gitignored)')
+  console.error('    .work/              created lazily on first run (gitignored)')
   console.error('')
   console.error('Author your own scripts and pipelines inside .runework/.')
 

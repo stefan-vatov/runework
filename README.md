@@ -20,19 +20,31 @@ Install any wrapped CLIs separately:
 Single-provider run:
 
 ```bash
-npm run run -- codex "Summarize this repository"
+npx runework-run codex "Summarize this repository"
+```
+
+Single-provider run with structured JSON output:
+
+```bash
+npx runework-run --json codex "Summarize this repository"
 ```
 
 Availability check:
 
 ```bash
-npm run detect
+npx runework-detect
+```
+
+Availability check with structured JSON output:
+
+```bash
+npx runework-detect --json
 ```
 
 Scaffold a blank `.runework/` package in another repo:
 
 ```bash
-node --conditions=source src/cli/init.ts /path/to/target-repo
+npx runework-init /path/to/target-repo
 ```
 
 Run a user-authored pipeline from that repo:
@@ -42,7 +54,16 @@ cd /path/to/target-repo/.runework
 npx runework-pipeline my-pipeline
 ```
 
+Run a pipeline with the final result emitted as JSON:
+
+```bash
+cd /path/to/target-repo/.runework
+npx runework-pipeline --json my-pipeline
+```
+
 All adapter runs are journaled into `.runework/.work/runs/` when your scripts or pipelines call `writeJournal()`.
+
+From a source checkout of this repo, the equivalent development commands are `npm run run -- ...`, `npm run detect`, `npm run detect -- --json`, and `node --conditions=source src/cli/init.ts`.
 
 ## Library Usage
 
@@ -56,6 +77,8 @@ const result = await codex.run({
   cwd: process.cwd(),
 })
 ```
+
+Each adapter result includes `result.command` with the exact `bin`, `args`, and `cwd` used for the underlying CLI invocation.
 
 Provider-specific flags should go through `extraArgs`. Shared request fields stay limited to what the underlying adapter actually supports.
 

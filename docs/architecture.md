@@ -85,6 +85,7 @@ The contract is intentionally narrow:
 
 - `capabilities` declares which request features a provider actually supports.
 - `extraArgs` remains the escape hatch for provider-specific flags.
+- adapter results include the exact executed `bin`, `args`, and `cwd`.
 - adapters build honest argv and pass execution through `runCli()`.
 
 `runCli()` is the single place where zx command execution policy lives.
@@ -107,10 +108,10 @@ Core helpers:
 
 The CLI remains thin:
 
-- `runework-run` executes a single adapter call.
-- `runework-detect` reports installed tools.
+- `runework-run` executes a single adapter call and supports `--json` for machine-readable results.
+- `runework-detect` reports installed tools and supports `--json` so agents can read availability plus declared adapter capabilities directly.
 - `runework-init` creates a blank `.runework/` package.
-- `runework-pipeline` runs a user-authored pipeline by name.
+- `runework-pipeline` runs a user-authored pipeline by name and supports `--json`, keeping progress on `stderr` while writing the final run result to `stdout`.
 
 There is no built-in workflow catalog, review loop, prompt library, or rich TUI. Consumer packages can build those on top of the runtime if they want them.
 

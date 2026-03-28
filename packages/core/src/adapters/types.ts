@@ -1,4 +1,4 @@
-export type ApprovalMode = 'never' | 'on-request' | 'untrusted'
+export type ApprovalMode = 'never' | 'on-failure' | 'on-request' | 'untrusted'
 
 export type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 
@@ -10,6 +10,12 @@ export type AgentOutputChunk = {
   provider: string
   stream: AgentOutputStreamName
   text: string
+}
+
+export type AgentCommandInvocation = {
+  bin: string
+  args: string[]
+  cwd: string
 }
 
 export type AgentRequestOption =
@@ -54,6 +60,8 @@ export type AgentRunResult = {
   provider: string
   ok: boolean
   exitCode: number | null
+  /** Exact CLI invocation executed by the adapter */
+  command: AgentCommandInvocation
   /** The main text output (final message, result, etc.) */
   text: string
   /** Parsed structured output if schema was provided */

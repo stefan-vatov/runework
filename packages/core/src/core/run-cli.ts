@@ -1,6 +1,7 @@
+import { existsSync } from 'node:fs'
 import { StringDecoder } from 'node:string_decoder'
 
-import { $ } from 'zx'
+import { $, quote } from 'zx'
 
 export type CliOutputStreamName = 'stdout' | 'stderr'
 
@@ -43,6 +44,45 @@ function mergeEnv(
   return merged
 }
 
+function resolveShellPath(): string | true {
+  if (process.platform === 'win32') return true
+
+  const candidates = [
+    '/opt/homebrew/bin/bash',
+    '/bin/bash',
+    '/usr/bin/bash',
+    process.env.SHELL,
+    '/bin/sh',
+    '/usr/bin/sh',
+  ]
+
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) return candidate
+  }
+
+  return true
+}
+
+function resolveShellOptions(): {
+  shell: string | true
+  prefix?: string
+  postfix?: string
+  quote?: typeof quote
+} {
+  const shell = resolveShellPath()
+
+  if (typeof shell !== 'string') {
+    return { shell }
+  }
+
+  return {
+    shell,
+    prefix: 'set -euo pipefail;',
+    postfix: '',
+    quote,
+  }
+}
+
 /**
  * Single place for all CLI execution. Sets quiet, nothrow, cwd, env,
  * stdin, and timeout policy. Every adapter goes through here.
@@ -55,6 +95,7 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
   const stdoutDecoder = new StringDecoder('utf8')
   const stderrDecoder = new StringDecoder('utf8')
   let streamError: unknown
+  let childError: NodeJS.ErrnoException | undefined
 
   const proc = $({
     cwd,
@@ -62,12 +103,18 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
     input: opts.stdin,
     quiet: opts.quiet ?? true,
     nothrow: true,
+    ...resolveShellOptions(),
     timeout: opts.timeoutMs ? `${opts.timeoutMs}ms` : undefined,
   })
 
   // zx template: bin is a single string, args array gets properly escaped
   const processPromise = proc`${opts.bin} ${args}`
   let abortTimer: NodeJS.Timeout | undefined
+  processPromise.child?.once('error', (error) => {
+    childError = error instanceof Error
+      ? error as NodeJS.ErrnoException
+      : new Error(String(error)) as NodeJS.ErrnoException
+  })
   processPromise.child?.once('exit', () => {
     if (abortTimer) {
       clearTimeout(abortTimer)
@@ -107,10 +154,10 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
     }
   }
 
-  processPromise.stdout.on('data', (chunk) => {
+  processPromise.stdout?.on('data', (chunk) => {
     emitChunk('stdout', stdoutDecoder.write(chunk))
   })
-  processPromise.stderr.on('data', (chunk) => {
+  processPromise.stderr?.on('data', (chunk) => {
     emitChunk('stderr', stderrDecoder.write(chunk))
   })
 
@@ -129,14 +176,18 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
 
   if (streamError) throw streamError
 
+  const exitCode = output.exitCode ?? (childError?.code === 'ENOENT' ? 127 : null)
+  const stdout = output.stdout ?? ''
+  const stderr = (output.stderr ?? '') || childError?.message || ''
+
   return {
-    ok: output.exitCode === 0,
-    exitCode: output.exitCode ?? null,
-    stdout: output.stdout ?? '',
-    stderr: output.stderr ?? '',
+    ok: exitCode === 0,
+    exitCode,
+    stdout,
+    stderr,
     combined: combinedChunks.length > 0
       ? combinedChunks.join('')
-      : `${output.stdout ?? ''}${output.stderr ?? ''}`,
+      : `${stdout}${stderr}`,
     bin: opts.bin,
     args,
     cwd,

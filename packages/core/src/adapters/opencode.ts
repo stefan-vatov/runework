@@ -90,6 +90,11 @@ export class OpenCodeAdapter implements AgentAdapter {
       provider: this.name,
       ok: cli.ok,
       exitCode: cli.exitCode,
+      command: {
+        bin: cli.bin,
+        args: cli.args,
+        cwd: cli.cwd,
+      },
       text,
       stdout: cli.stdout,
       stderr: cli.stderr,

@@ -2,6 +2,22 @@ import { basename, dirname, resolve } from 'node:path'
 
 import type { AgentRunResult } from '@runework/core'
 
+export function consumeFlag(argv: string[], flag: string): { enabled: boolean; rest: string[] } {
+  let enabled = false
+  const rest: string[] = []
+
+  for (const arg of argv) {
+    if (arg === flag) {
+      enabled = true
+      continue
+    }
+
+    rest.push(arg)
+  }
+
+  return { enabled, rest }
+}
+
 export function resolveRuneworkDir(cwd = process.cwd()): string {
   return basename(cwd) === '.runework'
     ? cwd

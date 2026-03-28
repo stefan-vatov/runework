@@ -29,10 +29,11 @@ This creates a blank `.runework/` package:
   tsconfig.json
   scripts/
   pipelines/
-  .work/
 ```
 
 No prompts, review loops, AGENTS files, or tool-specific configs are copied into your repo. Those remain user-owned.
+
+`.runework/.work/` is created lazily on the first pipeline run or journal write.
 
 ### Flags
 
@@ -119,6 +120,15 @@ cd .runework
 npx runework-pipeline my-pipeline
 ```
 
+For agent callers that want a machine-readable result:
+
+```bash
+cd .runework
+npx runework-pipeline --json my-pipeline
+```
+
+In `--json` mode, progress stays on `stderr` and the final pipeline result is written as JSON on `stdout`.
+
 Resume a failed run:
 
 ```bash
@@ -140,6 +150,8 @@ import { detectTools } from 'runework'
 const tools = await detectTools()
 const available = tools.filter((tool) => tool.available)
 ```
+
+CLI callers can also use `runework-detect --json` to inspect installed tools together with each adapter's declared capability surface.
 
 ## Updating runework
 
