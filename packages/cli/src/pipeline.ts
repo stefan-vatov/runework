@@ -1,5 +1,10 @@
-import { listPipelines, runPipeline, PipelineRunError, createPipelineTui } from '@runework/pipelines'
-import { resolveRuneworkDir } from './helpers.ts'
+import {
+  listPipelines,
+  runPipeline,
+  PipelineRunError,
+  type PipelineProgressEvent,
+} from '@runework/pipelines'
+import { consumeFlag, resolveRuneworkDir } from './helpers.ts'
 
 function parseOptions(args: string[]): {
   pipelineOptions: Record<string, unknown>
@@ -31,13 +36,39 @@ function parseOptions(args: string[]): {
   return { pipelineOptions, resumeRunId }
 }
 
+function formatProgressEvent(event: PipelineProgressEvent): string {
+  try {
+    const text = JSON.stringify(event)
+    if (text) return text
+  } catch {
+    // Fall back to a coarse string so progress is never silently dropped.
+  }
+
+  return String(event.type ?? '[progress]')
+}
+
 export async function pipelineCommand(argv: string[] = process.argv.slice(2)): Promise<number> {
-  const [pipelineName, ...rest] = argv
+  const { enabled: jsonMode, rest: args } = consumeFlag(argv, '--json')
+  const [pipelineName, ...rest] = args
   const runeworkDir = resolveRuneworkDir()
+  const usage = {
+    command: 'runework-pipeline',
+    usage: 'runework-pipeline [--json] <pipeline-name> [--resume-run <run-id>] [--key value...]',
+  }
 
   if (!pipelineName) {
     const available = await listPipelines(runeworkDir)
-    console.error('Usage: runework-pipeline <pipeline-name> [--resume-run <run-id>] [--key value...]')
+    if (jsonMode) {
+      console.log(JSON.stringify({
+        ok: false,
+        error: 'pipeline name is required',
+        ...usage,
+        availablePipelines: available,
+      }, null, 2))
+      return 1
+    }
+
+    console.error(`Usage: ${usage.usage}`)
     if (available.length > 0) {
       console.error(`\nAvailable pipelines: ${available.join(', ')}`)
     } else {
@@ -46,35 +77,37 @@ export async function pipelineCommand(argv: string[] = process.argv.slice(2)): P
     return 1
   }
 
-  const { pipelineOptions, resumeRunId } = parseOptions(rest)
-  const tui = createPipelineTui(pipelineName)
-
   try {
+    const { pipelineOptions, resumeRunId } = parseOptions(rest)
     const result = await runPipeline(pipelineName, runeworkDir, {
       options: pipelineOptions,
       resumeRunId,
-      log: (msg) => tui.log(msg),
-      onProgress: (event) => {
-        switch (event.type) {
-          case 'start-parallel':
-            tui.startReview(event.names)
-            break
-          case 'task-done':
-            tui.modelDone(event.name, event.elapsed, event.ok)
-            break
-          case 'task-error':
-            tui.modelError(event.name, event.elapsed, event.error)
-            break
-          case 'start-phase':
-            tui.startSynthesis()
-            break
-          case 'phase-done':
-            tui.synthesisDone(event.elapsed)
-            break
+      log: (message) => {
+        if (jsonMode) {
+          console.error(JSON.stringify({ type: 'log', message }))
+          return
         }
+
+        console.error(message)
+      },
+      onProgress: (event) => {
+        console.error(formatProgressEvent(event))
       },
     })
-    await tui.finish(result)
+    if (jsonMode) {
+      console.log(JSON.stringify(result, null, 2))
+      return result.ok ? 0 : 1
+    }
+
+    console.error(result.summary)
+    if (result.runId) {
+      console.error(`run: ${result.runId}`)
+    }
+    if (result.outputs) {
+      for (const [label, path] of Object.entries(result.outputs)) {
+        console.error(`${label}: ${path}`)
+      }
+    }
     return result.ok ? 0 : 1
   } catch (err) {
     const message = err instanceof PipelineRunError
@@ -82,7 +115,30 @@ export async function pipelineCommand(argv: string[] = process.argv.slice(2)): P
       : err instanceof Error
         ? err.message
         : String(err)
-    await tui.finish({ ok: false, summary: `Error: ${message}` })
+    if (jsonMode) {
+      console.log(JSON.stringify(
+        err instanceof PipelineRunError
+          ? {
+            ok: false,
+            error: message,
+            pipelineName: err.pipelineName,
+            runId: err.runId,
+            outputDir: err.outputDir,
+            ...usage,
+          }
+          : {
+            ok: false,
+            error: message,
+            pipelineName,
+            ...usage,
+          },
+        null,
+        2,
+      ))
+      return 1
+    }
+
+    console.error(`Error: ${message}`)
     return 1
   }
 }

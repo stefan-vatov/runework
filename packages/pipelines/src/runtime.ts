@@ -1,5 +1,5 @@
-import { appendFile, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 import type {
@@ -141,11 +141,24 @@ export async function createPipelineWorkflowRuntime(
     }
   }
 
-  if (!opts.isResume) {
-    await saveState(statePath, state)
+  // Serialize workflow-state/event writes so parallel steps cannot clobber persisted run state.
+  let ioQueue: Promise<void> = Promise.resolve()
+  const inFlightSteps = new Map<string, Promise<unknown>>()
+  function enqueueIo<T>(work: () => Promise<T>): Promise<T> {
+    const next = ioQueue.then(work, work)
+    ioQueue = next.then(() => undefined, () => undefined)
+    return next
   }
 
-  await appendEvent(eventsPath, {
+  if (!opts.isResume) {
+    await enqueueIo(() => saveState(statePath, state))
+  }
+
+  async function recordEvent(event: WorkflowEvent): Promise<void> {
+    await enqueueIo(() => appendEvent(eventsPath, event))
+  }
+
+  await recordEvent({
     type: 'run-started',
     pipelineName: opts.pipelineName,
     runId: opts.runId,
@@ -156,12 +169,15 @@ export async function createPipelineWorkflowRuntime(
   })
 
   async function persist(): Promise<void> {
-    state = { ...state, updatedAt: new Date().toISOString() }
-    await saveState(statePath, state)
+    await enqueueIo(async () => {
+      state = { ...state, updatedAt: new Date().toISOString() }
+      await saveState(statePath, state)
+    })
   }
 
   async function writeOutput(filename: string, content: string): Promise<string> {
     const filePath = join(opts.outputDir, filename)
+    await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, content, 'utf8')
     state.outputs[filename] = filePath
     await persist()
@@ -172,7 +188,7 @@ export async function createPipelineWorkflowRuntime(
     if (!id.trim()) throw new Error('step() requires a non-empty step ID')
 
     if (Object.prototype.hasOwnProperty.call(state.stepResults, id)) {
-      await appendEvent(eventsPath, {
+      await recordEvent({
         type: 'step-cached',
         pipelineName: opts.pipelineName,
         runId: opts.runId,
@@ -182,37 +198,47 @@ export async function createPipelineWorkflowRuntime(
       return decodeStoredValue<T>(state.stepResults[id])
     }
 
-    await appendEvent(eventsPath, {
-      type: 'step-started',
-      pipelineName: opts.pipelineName,
-      runId: opts.runId,
-      stepId: id,
-      at: new Date().toISOString(),
-    })
+    const inFlight = inFlightSteps.get(id)
+    if (inFlight) return inFlight as Promise<T>
 
-    try {
-      const value = await run()
-      state.stepResults[id] = encodeStoredValue(value)
-      await persist()
-      await appendEvent(eventsPath, {
-        type: 'step-completed',
+    const task = (async (): Promise<T> => {
+      await recordEvent({
+        type: 'step-started',
         pipelineName: opts.pipelineName,
         runId: opts.runId,
         stepId: id,
         at: new Date().toISOString(),
       })
-      return value
-    } catch (error) {
-      await appendEvent(eventsPath, {
-        type: 'step-failed',
-        pipelineName: opts.pipelineName,
-        runId: opts.runId,
-        stepId: id,
-        error: toErrorMessage(error),
-        at: new Date().toISOString(),
-      })
-      throw error
-    }
+
+      try {
+        const value = await run()
+        state.stepResults[id] = encodeStoredValue(value)
+        await persist()
+        await recordEvent({
+          type: 'step-completed',
+          pipelineName: opts.pipelineName,
+          runId: opts.runId,
+          stepId: id,
+          at: new Date().toISOString(),
+        })
+        return value
+      } catch (error) {
+        await recordEvent({
+          type: 'step-failed',
+          pipelineName: opts.pipelineName,
+          runId: opts.runId,
+          stepId: id,
+          error: toErrorMessage(error),
+          at: new Date().toISOString(),
+        })
+        throw error
+      } finally {
+        inFlightSteps.delete(id)
+      }
+    })()
+
+    inFlightSteps.set(id, task)
+    return task
   }
 
   async function checkpoint<T>(id: string, value: T): Promise<T> {
@@ -220,7 +246,7 @@ export async function createPipelineWorkflowRuntime(
 
     state.checkpoints[id] = encodeStoredValue(value)
     await persist()
-    await appendEvent(eventsPath, {
+    await recordEvent({
       type: 'checkpoint-saved',
       pipelineName: opts.pipelineName,
       runId: opts.runId,
@@ -247,7 +273,7 @@ export async function createPipelineWorkflowRuntime(
     }
 
     if (cached?.status === 'completed' && cached.result) {
-      await appendEvent(eventsPath, {
+      await recordEvent({
         type: 'child-cached',
         pipelineName: opts.pipelineName,
         runId: opts.runId,
@@ -268,7 +294,7 @@ export async function createPipelineWorkflowRuntime(
     }
     await persist()
 
-    await appendEvent(eventsPath, {
+    await recordEvent({
       type: 'child-started',
       pipelineName: opts.pipelineName,
       runId: opts.runId,
@@ -291,7 +317,7 @@ export async function createPipelineWorkflowRuntime(
         result,
       }
       await persist()
-      await appendEvent(eventsPath, {
+      await recordEvent({
         type: 'child-completed',
         pipelineName: opts.pipelineName,
         runId: opts.runId,
@@ -309,7 +335,7 @@ export async function createPipelineWorkflowRuntime(
         status: 'failed',
       }
       await persist()
-      await appendEvent(eventsPath, {
+      await recordEvent({
         type: 'child-failed',
         pipelineName: opts.pipelineName,
         runId: opts.runId,
@@ -338,7 +364,7 @@ export async function createPipelineWorkflowRuntime(
         )
       }
 
-      await appendEvent(eventsPath, {
+      await recordEvent({
         type: 'loop-iteration-started',
         pipelineName: opts.pipelineName,
         runId: opts.runId,
@@ -351,7 +377,7 @@ export async function createPipelineWorkflowRuntime(
       loopState = await checkpoint(stateKey, nextState)
       iteration = await checkpoint(iterationKey, iteration + 1)
 
-      await appendEvent(eventsPath, {
+      await recordEvent({
         type: 'loop-iteration-completed',
         pipelineName: opts.pipelineName,
         runId: opts.runId,
@@ -381,7 +407,7 @@ export async function createPipelineWorkflowRuntime(
     }
     await persist()
 
-    await appendEvent(eventsPath, {
+    await recordEvent({
       type: 'run-completed',
       pipelineName: opts.pipelineName,
       runId: opts.runId,
@@ -402,7 +428,7 @@ export async function createPipelineWorkflowRuntime(
     }
     await persist()
 
-    await appendEvent(eventsPath, {
+    await recordEvent({
       type: 'run-failed',
       pipelineName: opts.pipelineName,
       runId: opts.runId,

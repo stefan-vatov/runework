@@ -1,6 +1,6 @@
 # runework
 
-Thin `zx` toolkit for orchestrating `codex`, `claude`, and `opencode` while keeping repo-specific prompts, rules, and pipeline policy inside each target codebase.
+Thin `zx` runtime for durable AI CLI execution. `runework` owns adapters, execution, journaling, templating, and a generic pipeline runtime. It does not ship prompts, review loops, agent rules, or starter workflows.
 
 ## Install
 
@@ -9,57 +9,18 @@ npm install
 npm test
 ```
 
-Install any wrapped CLIs separately:
+Install the provider CLIs you want to use separately. Current built-in adapters:
 
 - `codex`
 - `claude`
 - `opencode`
 
-To scaffold another repo from a local checkout, run:
-
-```bash
-node --conditions=source src/cli/init.ts /path/to/target-repo
-```
-
-## CLI
-
-Single-provider runs:
-
-```bash
-npm run run -- codex "Summarize this repository"
-npm run run -- claude "Summarize this repository"
-npm run run -- opencode "Summarize this repository"
-```
-
-Cross-provider compare:
-
-```bash
-npm run compare -- "Summarize this repository"
-```
-
-Availability check:
-
-```bash
-npm run detect
-```
-
-All runs are journaled into `.runework/.work/runs/`.
-
-## Releases
-
-This repo uses Nx Release for semantic versioning, changelog generation, and git tags. The public root package and the private bundled workspace packages are versioned together so the publish manifest stays npm-compatible.
-
-```bash
-npm run release:dry-run
-npm run release
-```
-
-`npm run release` now uses conventional commits for non-interactive version selection. By default, `feat` triggers a minor release, while `fix` and `chore` trigger patch releases. Use `npm run release:patch`, `npm run release:minor`, or `npm run release:major` when you want to force a specific bump locally. See [`docs/releasing.md`](docs/releasing.md) for the exact workflow and the later npm publishing path.
+If you only need a one-off prompt, call the provider CLI directly. `runework` earns the extra layer when you need durable steps, resumable pipelines, provider composition, or a stable adapter contract.
 
 ## Library Usage
 
 ```ts
-import { compareProviders, getAdapter } from 'runework'
+import { getAdapter } from 'runework'
 
 const codex = getAdapter('codex')
 
@@ -67,32 +28,104 @@ const result = await codex.run({
   prompt: 'Summarize this repository',
   cwd: process.cwd(),
 })
+```
 
-const comparisons = await compareProviders({
-  adapters: [codex],
-  promptTemplate: 'Summarize {{repo}} in 3 bullets',
-  variables: { repo: 'runework' },
-  common: { cwd: process.cwd() },
+Each adapter result includes `result.command` with the exact `bin`, `args`, and `cwd` used for the underlying CLI invocation.
+
+Provider-specific flags should go through `extraArgs`. Shared request fields stay limited to what the underlying adapter actually supports.
+
+For durable local workflows, author your own pipeline files:
+
+```ts
+import { defineWorkflowPipeline } from 'runework/pipelines'
+
+export default defineWorkflowPipeline({
+  version: 1,
+  async run(ctx) {
+    const summary = await ctx.step('summary', async () => 'ready')
+    const outputPath = await ctx.writeOutput('summary.txt', summary)
+    return { ok: true, outputPath, summary: 'pipeline complete' }
+  },
 })
 ```
 
-Provider-specific flags should go through `extraArgs`. `compareProviders()` accepts only request fields supported by every selected adapter.
+## Thin CLI Utilities
+
+`runework-run` stays thin. Use it for scripting, journaling, or adapter diagnostics when the provider CLI alone is not enough.
+
+Single-provider run:
+
+```bash
+npx runework-run codex "Summarize this repository"
+```
+
+Single-provider run with structured JSON output:
+
+```bash
+npx runework-run --json codex "Summarize this repository"
+```
+
+Availability check:
+
+```bash
+npx runework-detect
+```
+
+Availability check with structured JSON output:
+
+```bash
+npx runework-detect --json
+```
+
+Scaffold a blank `.runework/` package in another repo:
+
+```bash
+npx runework-init /path/to/target-repo
+```
+
+Run a user-authored pipeline from that repo:
+
+```bash
+cd /path/to/target-repo/.runework
+npx runework-pipeline my-pipeline
+```
+
+Run a pipeline with the final result emitted as JSON:
+
+```bash
+cd /path/to/target-repo/.runework
+npx runework-pipeline --json my-pipeline
+```
+
+All adapter runs are journaled into `.runework/.work/runs/` when your scripts or pipelines call `writeJournal()`.
+
+From a source checkout of this repo, the equivalent development commands are `npm run run -- ...`, `npm run detect`, `npm run detect -- --json`, and `node --conditions=source packages/runework/src/cli/init.ts`.
+
+## Scaffold
+
+`runework-init` creates a blank user-owned runtime package:
+
+```text
+.runework/
+  package.json
+  tsconfig.json
+  scripts/
+  pipelines/
+```
+
+You author the scripts, prompts, and policies inside that target repo. `runework` only provides the substrate.
 
 ## Layout
 
 ```text
-src/
-  adapters/     provider wrappers and argv builders
-  cli/          small entrypoints
-  core/         execution, templating, journaling, JSON helpers
-  pipelines/    durable local workflow runtime
-  workflows/    reusable orchestration
+packages/
+  runework/     public umbrella package
+  core/         adapters, execution, templating, journaling, JSON helpers
+  pipelines/    durable local pipeline runtime
+  cli/          thin CLI command implementations
+  reporters/    adjacent reporter utilities kept out of the root runtime surface
 scripts/
   build.mjs     clean build + CLI permission fixup
-templates/
-  repo-local/   seed files for per-repo automation
+.runework/
+  ...           repo-local dogfood workflows and tooling
 ```
-
-## Repo-Local Seeds
-
-Use `templates/repo-local/` as the seed for target repositories. Keep project-specific prompts, skills, rules, and local pipeline policy there so this repo stays focused on primitives and reusable workflows.

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -11,8 +11,41 @@ async function writePipeline(
   name: string,
   source: string,
 ): Promise<void> {
+  await linkRuneworkPackage(runeworkDir)
   await mkdir(join(runeworkDir, 'pipelines'), { recursive: true })
   await writeFile(join(runeworkDir, 'pipelines', `${name}.ts`), source, 'utf8')
+}
+
+async function linkRuneworkPackage(runeworkDir: string): Promise<void> {
+  const nodeModulesDir = join(runeworkDir, 'node_modules')
+  const packageLink = join(nodeModulesDir, 'runework')
+  await mkdir(nodeModulesDir, { recursive: true })
+  await symlink(process.cwd(), packageLink, 'dir').catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EEXIST') throw error
+  })
+}
+
+async function createFakeCli(
+  t: { after: (cleanup: () => Promise<void> | void) => void },
+  name: string,
+  script: string,
+): Promise<{ binDir: string; pathEnv: string }> {
+  const tmpRoot = await mkdtemp(join(tmpdir(), `runework-pipeline-${name}-`))
+  t.after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  const binDir = join(tmpRoot, 'bin')
+  await mkdir(binDir, { recursive: true })
+
+  const scriptPath = join(binDir, name)
+  await writeFile(scriptPath, script, 'utf8')
+  await chmod(scriptPath, 0o755)
+
+  return {
+    binDir,
+    pathEnv: `${binDir}:${process.env.PATH ?? ''}`,
+  }
 }
 
 test('runPipeline creates a unique output directory for each run', async (t) => {
@@ -268,5 +301,171 @@ test('repeatUntil checkpoints loop state for resumed runs', async (t) => {
   assert.equal(
     await readFile(join(runeworkDir, '.work', 'repeat-loop', runId, 'loop.json'), 'utf8'),
     JSON.stringify({ value: 3 }),
+  )
+})
+
+test('runPipeline preserves parallel step results and outputs across resume', async (t) => {
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-parallel-steps-'))
+  t.after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  const runeworkDir = join(tmpRoot, '.runework')
+  await writePipeline(
+    runeworkDir,
+    'parallel-steps',
+    [
+      "import { readFile, writeFile } from 'node:fs/promises'",
+      "import { join } from 'node:path'",
+      '',
+      'function wait(ms) {',
+      '  return new Promise((resolve) => setTimeout(resolve, ms))',
+      '}',
+      '',
+      'async function bump(path) {',
+      "  const raw = await readFile(path, 'utf8').catch(() => '0')",
+      '  const next = Number(raw) + 1',
+      "  await writeFile(path, String(next), 'utf8')",
+      '  return next',
+      '}',
+      '',
+      'export default async function pipeline(ctx) {',
+      "  const leftCountPath = join(ctx.repoRoot, 'left-count.txt')",
+      "  const rightCountPath = join(ctx.repoRoot, 'right-count.txt')",
+      '  const [left, right] = await Promise.all([',
+      "    ctx.step('left', async () => {",
+      '      await wait(10)',
+      '      const count = await bump(leftCountPath)',
+      "      const output = await ctx.writeOutput('left.txt', `left-${count}`)",
+      '      return { count, output }',
+      '    }),',
+      "    ctx.step('right', async () => {",
+      '      await wait(5)',
+      '      const count = await bump(rightCountPath)',
+      "      const output = await ctx.writeOutput('right.txt', `right-${count}`)",
+      '      return { count, output }',
+      '    }),',
+      '  ])',
+      "  const failedOnce = await ctx.getCheckpoint('failed-once')",
+      '  if (!failedOnce) {',
+      "    await ctx.checkpoint('failed-once', true)",
+      "    throw new Error('fail once after parallel steps')",
+      '  }',
+      "  return { ok: true, outputPath: left.output, outputs: { left: left.output, right: right.output }, summary: 'parallel done' }",
+      '}',
+      '',
+    ].join('\n'),
+  )
+
+  const runId = 'parallel-run'
+  await assert.rejects(
+    () => runPipeline('parallel-steps', runeworkDir, { runId }),
+    /fail once after parallel steps/,
+  )
+
+  const state = JSON.parse(
+    await readFile(join(runeworkDir, '.work', 'parallel-steps', runId, 'workflow-state.json'), 'utf8'),
+  ) as {
+    outputs: Record<string, string>
+    stepResults: Record<string, unknown>
+  }
+  assert.deepEqual(Object.keys(state.stepResults).sort(), ['left', 'right'])
+  assert.ok(state.outputs['left.txt']?.endsWith('/left.txt'))
+  assert.ok(state.outputs['right.txt']?.endsWith('/right.txt'))
+
+  const resumed = await runPipeline('parallel-steps', runeworkDir, { resumeRunId: runId })
+  assert.equal(resumed.ok, true)
+  assert.equal(await readFile(join(tmpRoot, 'left-count.txt'), 'utf8'), '1')
+  assert.equal(await readFile(join(tmpRoot, 'right-count.txt'), 'utf8'), '1')
+})
+
+test('runPipeline de-duplicates concurrent step calls with the same step ID', async (t) => {
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-duplicate-step-'))
+  t.after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  const runeworkDir = join(tmpRoot, '.runework')
+  await writePipeline(
+    runeworkDir,
+    'duplicate-step',
+    [
+      "import { appendFile } from 'node:fs/promises'",
+      "import { join } from 'node:path'",
+      '',
+      'export default async function pipeline(ctx) {',
+      "  const logPath = join(ctx.repoRoot, 'step.log')",
+      '  const run = async () => {',
+      "    await appendFile(logPath, 'same\\n', 'utf8')",
+      '    return 1',
+      '  }',
+      "  const [left, right] = await Promise.all([ctx.step('same', run), ctx.step('same', run)])",
+      "  return { ok: true, summary: `${left}:${right}` }",
+      '}',
+      '',
+    ].join('\n'),
+  )
+
+  const result = await runPipeline('duplicate-step', runeworkDir, { log: () => {} })
+  assert.equal(result.ok, true)
+  assert.equal(result.summary, '1:1')
+  assert.equal(await readFile(join(tmpRoot, 'step.log'), 'utf8'), 'same\n')
+})
+
+test('runPipeline abort signal propagates into adapter-backed steps without wrapping the error', async (t) => {
+  const fake = await createFakeCli(
+    t,
+    'codex',
+    [
+      '#!/usr/bin/env node',
+      "process.on('SIGTERM', () => {})",
+      "setTimeout(() => process.stdout.write('{\"type\":\"turn.started\"}\\n'), 20)",
+      "setTimeout(() => process.stdout.write('{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"late\"}}\\n'), 800)",
+      'setTimeout(() => process.exit(0), 1200)',
+      '',
+    ].join('\n'),
+  )
+
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-abort-pipeline-'))
+  t.after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  const runeworkDir = join(tmpRoot, '.runework')
+  await writePipeline(
+    runeworkDir,
+    'abort-agent',
+    [
+      'export default async function pipeline(ctx) {',
+      "  await ctx.adapters.codex.run({",
+      "    prompt: 'abort this run',",
+      "    env: { PATH: String(ctx.options.pathEnv) },",
+      '    onOutputChunk() {},',
+      '  })',
+      "  return { ok: true, summary: 'done' }",
+      '}',
+      '',
+    ].join('\n'),
+  )
+
+  const controller = new AbortController()
+  const startedAt = Date.now()
+  const run = runPipeline('abort-agent', runeworkDir, {
+    options: { pathEnv: fake.pathEnv },
+    signal: controller.signal,
+  })
+
+  setTimeout(() => {
+    controller.abort()
+  }, 40)
+
+  await assert.rejects(
+    run,
+    (error: unknown) => error instanceof Error && error.name === 'AbortError',
+  )
+
+  assert.ok(
+    Date.now() - startedAt < 500,
+    `expected runPipeline to abort promptly, took ${Date.now() - startedAt}ms`,
   )
 })

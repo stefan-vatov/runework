@@ -43,9 +43,9 @@ jobs:
       matrix:
         include:
           - name: Unit Tests
-            command: npm run test:unit
+            command: npm run test:unit:ci
           - name: Integration Tests
-            command: npm run test:integration
+            command: npm run test:integration:ci
           - name: Publish Check
             command: npm run test:publish
     steps:

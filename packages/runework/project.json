@@ -1,0 +1,27 @@
+{
+  "name": "runework",
+  "root": "packages/runework",
+  "sourceRoot": "packages/runework/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "command": "node scripts/build-package.mjs packages/runework/tsconfig.build.json --chmod packages/runework/bin --bundle-deps"
+      },
+      "dependsOn": ["^build"]
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint packages/runework/src/ packages/runework/bin/"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node --conditions=source --test packages/runework/src/*.unit.test.ts packages/runework/src/*.integration.test.ts packages/runework/src/*.publish.test.ts"
+      }
+    }
+  }
+}

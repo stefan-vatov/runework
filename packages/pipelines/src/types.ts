@@ -1,11 +1,13 @@
 import type { AgentAdapter } from '@runework/core'
 
-export type PipelineProgressEvent =
-  | { type: 'start-parallel'; names: string[] }
-  | { type: 'task-done'; name: string; elapsed: string; ok: boolean }
-  | { type: 'task-error'; name: string; elapsed: string; error: string }
-  | { type: 'start-phase'; label: string }
-  | { type: 'phase-done'; label: string; elapsed: string }
+export type PipelineProgressEvent = {
+  /**
+   * Consumer-defined event name. runework requires a stable type field and
+   * leaves the rest of the payload to the workflow package that emits it.
+   */
+  type: string
+  [key: string]: unknown
+}
 
 export type WorkflowEvent =
   | { type: 'run-started'; pipelineName: string; runId: string; resumed: boolean; at: string; parentRunId?: string; version?: number }
@@ -72,7 +74,7 @@ export type PipelineContext = {
   addGitignoreEntries(entries: string[]): Promise<void>
   /** Report plain text progress. */
   log(message: string): void
-  /** Emit structured progress events — the TUI uses these for rich display. */
+  /** Emit structured progress events for consumer-owned UIs and reporters. */
   progress(event: PipelineProgressEvent): void
   /** Arbitrary options passed by the caller */
   options: Record<string, unknown>

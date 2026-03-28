@@ -23,22 +23,17 @@
       "source": "./src/zx.ts",
       "types": "./dist/zx.d.ts",
       "default": "./dist/zx.js"
-    },
-    "./ink": {
-      "source": "./src/ink.ts",
-      "types": "./dist/ink.d.ts",
-      "default": "./dist/ink.js"
     }
   },
   "files": [
     "dist",
-    "src"
+    "src/adapters",
+    "src/core",
+    "src/index.ts",
+    "src/models.ts",
+    "src/zx.ts"
   ],
   "dependencies": {
-    "@types/react": "^19.2.14",
-    "ink": "^6.8.0",
-    "ink-spinner": "^5.0.0",
-    "react": "^19.2.4",
     "zx": "^8.0.0"
   }
 }

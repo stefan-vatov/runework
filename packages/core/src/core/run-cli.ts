@@ -1,4 +1,14 @@
-import { $ } from 'zx'
+import { existsSync } from 'node:fs'
+import { StringDecoder } from 'node:string_decoder'
+
+import { $, quote } from 'zx'
+
+export type CliOutputStreamName = 'stdout' | 'stderr'
+
+export type CliOutputChunk = {
+  stream: CliOutputStreamName
+  text: string
+}
 
 export type CliRunOptions = {
   bin: string
@@ -7,6 +17,8 @@ export type CliRunOptions = {
   env?: Record<string, string | undefined>
   stdin?: string
   quiet?: boolean
+  onOutputChunk?: (chunk: CliOutputChunk) => void
+  signal?: AbortSignal
   timeoutMs?: number
 }
 
@@ -33,14 +45,88 @@ function mergeEnv(
   return merged
 }
 
+function resolveShellPath(): string | true {
+  if (process.platform === 'win32') return true
+
+  const candidates = [
+    '/opt/homebrew/bin/bash',
+    '/bin/bash',
+    '/usr/bin/bash',
+    '/bin/sh',
+    '/usr/bin/sh',
+  ]
+
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) return candidate
+  }
+
+  return true
+}
+
+function resolveShellOptions(): {
+  shell: string | true
+  prefix?: string
+  postfix?: string
+  quote?: typeof quote
+} {
+  const shell = resolveShellPath()
+
+  if (typeof shell !== 'string') {
+    return { shell }
+  }
+
+  return {
+    shell,
+    // runCli only emits a single CLI command, so a POSIX-safe `set -eu` keeps
+    // execution deterministic across bash/sh environments without depending on
+    // the caller's interactive shell features.
+    prefix: 'set -eu;',
+    postfix: '',
+    quote,
+  }
+}
+
+function createAbortError(message = 'CLI run aborted'): Error {
+  const error = new Error(message)
+  error.name = 'AbortError'
+  return error
+}
+
+function signalProcess(pid: number | undefined, signal: NodeJS.Signals): void {
+  if (!pid) return
+
+  try {
+    if (process.platform !== 'win32') {
+      process.kill(-pid, signal)
+      return
+    }
+  } catch {}
+
+  try {
+    process.kill(pid, signal)
+  } catch {
+    // Ignore ESRCH/EPERM and let the main process result decide the outcome.
+  }
+}
+
 /**
  * Single place for all CLI execution. Sets quiet, nothrow, cwd, env,
  * stdin, and timeout policy. Every adapter goes through here.
  */
 export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
+  if (opts.signal?.aborted) {
+    throw createAbortError()
+  }
+
   const args = opts.args ?? []
   const cwd = opts.cwd ?? process.cwd()
   const start = Date.now()
+  const combinedChunks: string[] = []
+  const stdoutDecoder = new StringDecoder('utf8')
+  const stderrDecoder = new StringDecoder('utf8')
+  let streamError: unknown
+  let childError: NodeJS.ErrnoException | undefined
+  let abortError: Error | undefined
 
   const proc = $({
     cwd,
@@ -48,18 +134,115 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
     input: opts.stdin,
     quiet: opts.quiet ?? true,
     nothrow: true,
+    detached: process.platform !== 'win32',
+    ...resolveShellOptions(),
     timeout: opts.timeoutMs ? `${opts.timeoutMs}ms` : undefined,
   })
 
   // zx template: bin is a single string, args array gets properly escaped
-  const output = await proc`${opts.bin} ${args}`
+  const processPromise = proc`${opts.bin} ${args}`
+  let abortTimer: NodeJS.Timeout | undefined
+  let removeAbortListener: (() => void) | undefined
+  processPromise.child?.once('error', (error) => {
+    childError = error instanceof Error
+      ? error as NodeJS.ErrnoException
+      : new Error(String(error)) as NodeJS.ErrnoException
+  })
+  processPromise.child?.once('exit', () => {
+    if (abortTimer && !abortError) {
+      clearTimeout(abortTimer)
+      abortTimer = undefined
+    }
+
+    removeAbortListener?.()
+    removeAbortListener = undefined
+  })
+
+  const abortProcess = (error: Error): void => {
+    if (!abortError) {
+      abortError = error
+    }
+
+    const rootPid = processPromise.child?.pid
+    signalProcess(rootPid, 'SIGTERM')
+
+    if (!abortTimer) {
+      abortTimer = setTimeout(() => {
+        abortTimer = undefined
+        signalProcess(rootPid, 'SIGKILL')
+      }, 100)
+      abortTimer.unref?.()
+    }
+  }
+
+  if (opts.signal) {
+    const onAbort = () => {
+      abortProcess(createAbortError())
+    }
+
+    opts.signal.addEventListener('abort', onAbort, { once: true })
+    removeAbortListener = () => {
+      opts.signal?.removeEventListener('abort', onAbort)
+    }
+  }
+
+  const emitChunk = (stream: CliOutputStreamName, text: string): void => {
+    if (!text) return
+    combinedChunks.push(text)
+    if (!opts.onOutputChunk || streamError) return
+
+    try {
+      opts.onOutputChunk({ stream, text })
+    } catch (error) {
+      streamError = error
+      abortProcess(
+        error instanceof Error
+          ? error
+          : new Error(String(error)),
+      )
+    }
+  }
+
+  processPromise.stdout?.on('data', (chunk) => {
+    emitChunk('stdout', stdoutDecoder.write(chunk))
+  })
+  processPromise.stderr?.on('data', (chunk) => {
+    emitChunk('stderr', stderrDecoder.write(chunk))
+  })
+
+  let output
+  try {
+    output = await processPromise
+  } catch (error) {
+    emitChunk('stdout', stdoutDecoder.end())
+    emitChunk('stderr', stderrDecoder.end())
+    removeAbortListener?.()
+    removeAbortListener = undefined
+    if (streamError) throw streamError
+    if (abortError) throw abortError
+    throw error
+  }
+
+  emitChunk('stdout', stdoutDecoder.end())
+  emitChunk('stderr', stderrDecoder.end())
+  removeAbortListener?.()
+  removeAbortListener = undefined
+
+  if (streamError) throw streamError
+  if (abortError) throw abortError
+
+  const exitCode = output.exitCode ?? (childError?.code === 'ENOENT' ? 127 : null)
+  const stdout = output.stdout ?? ''
+  const stderr = (output.stderr ?? '') || childError?.message || ''
 
   return {
-    ok: output.exitCode === 0,
-    exitCode: output.exitCode ?? null,
-    stdout: output.stdout ?? '',
-    stderr: output.stderr ?? '',
-    combined: `${output.stdout ?? ''}${output.stderr ?? ''}`,
+    ok: exitCode === 0,
+    exitCode,
+    stdout,
+    stderr,
+    combined: combinedChunks.length > 0
+      ? combinedChunks.join('')
+      : `${stdout}${stderr}`,
     bin: opts.bin,
     args,
     cwd,

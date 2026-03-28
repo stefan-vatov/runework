@@ -7,13 +7,14 @@ import { buildOpenCodeArgs } from './adapters/opencode.ts'
 import { parseJsonLines } from './core/json.ts'
 import { renderTemplate } from './core/render-template.ts'
 
-test('buildCodexArgs places root and exec flags where codex expects them', () => {
+test('buildCodexArgs keeps top-level approval flags outside exec while preserving exec options', () => {
   const args = buildCodexArgs(
     {
       prompt: 'Summarize this repository',
       cwd: '/repo',
       model: 'gpt-5.4',
       sandbox: 'workspace-write',
+      approvalMode: 'never',
       schema: { type: 'object' },
       extraArgs: ['--skip-git-repo-check'],
     },
@@ -24,11 +25,13 @@ test('buildCodexArgs places root and exec flags where codex expects them', () =>
   )
 
   assert.deepEqual(args, [
+    '-a',
+    'never',
+    'exec',
     '-C',
     '/repo',
     '-s',
     'workspace-write',
-    'exec',
     '--output-schema',
     '/tmp/codex-schema.json',
     '-m',
@@ -48,25 +51,71 @@ test('buildCodexArgs keeps resume argv valid', () => {
       cwd: '/repo',
       model: 'gpt-5.4',
       sandbox: 'workspace-write',
-      schema: { type: 'object' },
       resume: { last: true },
     },
     {
       outputFile: '/tmp/codex-last-message.txt',
-      schemaFile: '/tmp/codex-schema.json',
     },
   )
 
   assert.deepEqual(args, [
+    'exec',
     '-C',
     '/repo',
     '-s',
     'workspace-write',
-    'exec',
-    '--output-schema',
-    '/tmp/codex-schema.json',
+    '-m',
+    'gpt-5.4',
+    '--json',
+    '--output-last-message',
+    '/tmp/codex-last-message.txt',
     'resume',
     '--last',
+    '-',
+  ])
+})
+
+test('buildCodexArgs preserves supported codex approval modes verbatim', () => {
+  const args = buildCodexArgs(
+    {
+      prompt: 'Retry after a failed command',
+      approvalMode: 'on-failure',
+    },
+    {
+      outputFile: '/tmp/codex-last-message.txt',
+    },
+  )
+
+  assert.deepEqual(args, [
+    '-a',
+    'on-failure',
+    'exec',
+    '--json',
+    '--output-last-message',
+    '/tmp/codex-last-message.txt',
+    '-',
+  ])
+})
+
+test('buildCodexArgs maps never + danger-full-access to Codex bypass flag', () => {
+  const args = buildCodexArgs(
+    {
+      prompt: 'Commit these changes',
+      cwd: '/repo',
+      model: 'gpt-5.4',
+      sandbox: 'danger-full-access',
+      approvalMode: 'never',
+    },
+    {
+      outputFile: '/tmp/codex-last-message.txt',
+    },
+  )
+
+  assert.deepEqual(args, [
+    'exec',
+    '-C',
+    '/repo',
+    '--dangerously-bypass-approvals-and-sandbox',
     '-m',
     'gpt-5.4',
     '--json',
@@ -74,6 +123,42 @@ test('buildCodexArgs keeps resume argv valid', () => {
     '/tmp/codex-last-message.txt',
     '-',
   ])
+})
+
+test('buildCodexArgs rejects schema output for resumed exec sessions', () => {
+  assert.throws(
+    () =>
+      buildCodexArgs(
+        {
+          prompt: 'Continue from the previous run',
+          schema: { type: 'object' },
+          resume: { last: true },
+        },
+        {
+          outputFile: '/tmp/codex-last-message.txt',
+          schemaFile: '/tmp/codex-schema.json',
+        },
+      ),
+    /codex does not support request option\(s\): schema when resuming exec sessions/,
+  )
+})
+
+test('buildCodexArgs rejects conflicting Codex extra args when typed sandbox or approval is set', () => {
+  assert.throws(
+    () =>
+      buildCodexArgs(
+        {
+          prompt: 'Commit these changes',
+          sandbox: 'danger-full-access',
+          approvalMode: 'never',
+          extraArgs: ['--full-auto'],
+        },
+        {
+          outputFile: '/tmp/codex-last-message.txt',
+        },
+      ),
+    /codex extraArgs cannot include --full-auto or bypass flags/,
+  )
 })
 
 test('buildClaudeArgs keeps large prompts off argv', () => {
@@ -106,16 +191,32 @@ test('buildClaudeArgs keeps large prompts off argv', () => {
   assert.ok(args.join(' ').length < 1024)
 })
 
+test('buildClaudeArgs switches to stream-json when realtime output streaming is requested', () => {
+  const args = buildClaudeArgs({
+    prompt: 'Stream the run',
+    onOutputChunk: () => {},
+  })
+
+  assert.deepEqual(args, [
+    '-p',
+    '--input-format',
+    'text',
+    '--output-format',
+    'stream-json',
+    '--include-partial-messages',
+  ])
+})
+
 test('providers reject unsupported request options instead of ignoring them', () => {
   assert.throws(
     () =>
       buildCodexArgs({
         prompt: 'Review this change',
-        approvalMode: 'on-request',
+        sessionName: 'review',
       }, {
         outputFile: '/tmp/codex-last-message.txt',
       }),
-    /codex does not support request option\(s\): approvalMode/,
+    /codex does not support request option\(s\): sessionName/,
   )
 
   assert.throws(
@@ -135,6 +236,30 @@ test('providers reject unsupported request options instead of ignoring them', ()
       }),
     /opencode does not support request option\(s\): schema/,
   )
+})
+
+test('buildOpenCodeArgs passes the working directory through opencode --dir', () => {
+  const args = buildOpenCodeArgs({
+    prompt: 'Review this change',
+    cwd: '/repo',
+    model: 'anthropic/claude-sonnet-4-5',
+    sessionName: 'review',
+    files: ['README.md'],
+  })
+
+  assert.deepEqual(args, [
+    'run',
+    '--format',
+    'json',
+    '-m',
+    'anthropic/claude-sonnet-4-5',
+    '--dir',
+    '/repo',
+    '--title',
+    'review',
+    '-f',
+    'README.md',
+  ])
 })
 
 test('renderTemplate stringifies structured values', () => {

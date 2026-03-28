@@ -77,6 +77,10 @@ export class OpenCodeAdapter implements AgentAdapter {
       cwd: request.cwd,
       env: request.env,
       stdin: request.prompt,
+      onOutputChunk: request.onOutputChunk
+        ? (chunk) => request.onOutputChunk?.({ provider: this.name, ...chunk })
+        : undefined,
+      signal: request.signal,
       timeoutMs: request.timeoutMs,
     })
 
@@ -87,6 +91,11 @@ export class OpenCodeAdapter implements AgentAdapter {
       provider: this.name,
       ok: cli.ok,
       exitCode: cli.exitCode,
+      command: {
+        bin: cli.bin,
+        args: cli.args,
+        cwd: cli.cwd,
+      },
       text,
       stdout: cli.stdout,
       stderr: cli.stderr,

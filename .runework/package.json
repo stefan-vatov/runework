@@ -3,13 +3,20 @@
   "type": "module",
   "description": "Local runework testing — uses file:.. to symlink to parent repo",
   "dependencies": {
-    "runework": "file:..",
+    "ink": "^6.8.0",
+    "ink-spinner": "^5.0.0",
+    "react": "^19.2.0",
+    "runework": "file:../packages/runework",
     "zx": "^8.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0"
   },
   "scripts": {
+    "pipeline": "node scripts/pipeline.ts",
+    "code-review": "node scripts/pipeline.ts code-review",
+    "constitutional-alignment": "node scripts/pipeline.ts constitutional-alignment",
     "review": "node scripts/review.ts",
     "explain": "node scripts/explain.ts"
   }

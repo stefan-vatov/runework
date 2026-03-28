@@ -31,8 +31,22 @@ function extractSessionId(events: unknown[]): string | undefined {
   return undefined
 }
 
+function extractLastAgentMessage(events: unknown[]): string | undefined {
+  let last: string | undefined
+  for (const event of events) {
+    if (!event || typeof event !== 'object') continue
+    const rec = event as Record<string, unknown>
+    if (rec.type !== 'item.completed') continue
+    const item = rec.item as Record<string, unknown> | undefined
+    if (item?.type === 'agent_message' && typeof item.text === 'string') {
+      last = item.text
+    }
+  }
+  return last
+}
+
 export const CODEX_CAPABILITIES: AgentAdapterCapabilities = {
-  approvalMode: false,
+  approvalMode: true,
   files: false,
   sandbox: true,
   schema: true,
@@ -44,48 +58,111 @@ type CodexArgFiles = {
   schemaFile?: string
 }
 
+const CODEX_BYPASS_FLAG = '--dangerously-bypass-approvals-and-sandbox'
+const CODEX_YOLO_FLAG = '--yolo'
+
+function hasCodexArg(args: string[] | undefined, flag: string): boolean {
+  if (!args?.length) return false
+  return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`))
+}
+
+function assertNoConflictingCodexExtraArgs(request: AgentRunRequest): void {
+  const extraArgs = request.extraArgs
+  if (!extraArgs?.length) return
+
+  if (
+    (request.sandbox || request.approvalMode)
+    && (
+      hasCodexArg(extraArgs, '--full-auto')
+      || hasCodexArg(extraArgs, CODEX_BYPASS_FLAG)
+      || hasCodexArg(extraArgs, CODEX_YOLO_FLAG)
+    )
+  ) {
+    throw new Error(
+      'codex extraArgs cannot include --full-auto or bypass flags when request.sandbox or request.approvalMode is set. Use the typed request fields as the single source of truth.',
+    )
+  }
+
+  if (
+    request.sandbox
+    && (
+      hasCodexArg(extraArgs, '--sandbox')
+      || extraArgs.includes('-s')
+    )
+  ) {
+    throw new Error(
+      'codex extraArgs cannot override sandbox when request.sandbox is set. Use request.sandbox instead.',
+    )
+  }
+
+  if (
+    request.approvalMode
+    && (
+      hasCodexArg(extraArgs, '--ask-for-approval')
+      || extraArgs.includes('-a')
+    )
+  ) {
+    throw new Error(
+      'codex extraArgs cannot override approval mode when request.approvalMode is set. Use request.approvalMode instead.',
+    )
+  }
+}
+
 export function buildCodexArgs(
   request: AgentRunRequest,
   files: CodexArgFiles,
 ): string[] {
   assertSupportedRequestOptions('codex', request, CODEX_CAPABILITIES)
+  if (request.schema && request.resume) {
+    throw new Error(
+      'codex does not support request option(s): schema when resuming exec sessions. Pass provider-specific CLI flags via extraArgs instead.',
+    )
+  }
+  assertNoConflictingCodexExtraArgs(request)
 
   const args: string[] = []
+  const useDangerousBypass = request.sandbox === 'danger-full-access' && request.approvalMode === 'never'
 
-  if (request.cwd) args.push('-C', request.cwd)
-  if (request.sandbox) args.push('-s', request.sandbox)
+  // Codex keeps approval policy on the top-level parser even for `exec`.
+  if (!useDangerousBypass && request.approvalMode) args.push('-a', request.approvalMode)
 
-  args.push('exec')
+  const execArgs: string[] = ['exec']
 
-  if (files.schemaFile) {
-    args.push('--output-schema', files.schemaFile)
+  if (request.cwd) execArgs.push('-C', request.cwd)
+  if (useDangerousBypass) {
+    execArgs.push(CODEX_BYPASS_FLAG)
+  } else if (request.sandbox) {
+    execArgs.push('-s', request.sandbox)
   }
 
+  if (files.schemaFile) {
+    execArgs.push('--output-schema', files.schemaFile)
+  }
+
+  if (request.model) execArgs.push('-m', request.model)
+  execArgs.push('--json', '--output-last-message', files.outputFile)
+  if (request.extraArgs?.length) execArgs.push(...request.extraArgs)
+
   if (request.resume?.sessionId || request.resume?.last) {
-    args.push('resume')
+    execArgs.push('resume')
 
     if (request.resume.sessionId) {
-      args.push(request.resume.sessionId)
+      execArgs.push(request.resume.sessionId)
     } else {
-      args.push('--last')
+      execArgs.push('--last')
     }
   }
 
-  if (request.model) args.push('-m', request.model)
-  args.push('--json', '--output-last-message', files.outputFile)
+  execArgs.push('-')
 
-  if (request.extraArgs?.length) args.push(...request.extraArgs)
-
-  args.push('-')
-
-  return args
+  return args.concat(execArgs)
 }
 
 /**
  * Adapter for OpenAI Codex CLI.
  *
  * Supports: --json events, --output-last-message, --output-schema,
- * sandbox, stdin prompt via `-`, resume.
+ * sandbox, approval mode, stdin prompt via `-`, resume.
  */
 export class CodexAdapter implements AgentAdapter {
   readonly name = 'codex'
@@ -111,19 +188,28 @@ export class CodexAdapter implements AgentAdapter {
       cwd: request.cwd,
       env: request.env,
       stdin: request.prompt,
+      onOutputChunk: request.onOutputChunk
+        ? (chunk) => request.onOutputChunk?.({ provider: this.name, ...chunk })
+        : undefined,
+      signal: request.signal,
       timeoutMs: request.timeoutMs,
     })
 
     try {
       const rawEvents = parseJsonLines(cli.stdout)
       const lastMessage = await readFile(outputFile, 'utf8').catch(() => '')
-      const text = (lastMessage || cli.stdout).trim()
+      const text = (lastMessage || extractLastAgentMessage(rawEvents) || cli.stdout).trim()
       const structured = request.schema ? safeJsonParse(text) : undefined
 
       return {
         provider: this.name,
         ok: cli.ok,
         exitCode: cli.exitCode,
+        command: {
+          bin: cli.bin,
+          args: cli.args,
+          cwd: cli.cwd,
+        },
         text,
         structured,
         sessionId: extractSessionId(rawEvents),
