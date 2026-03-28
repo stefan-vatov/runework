@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 
 const commands = [
   ['scripts/build-package.mjs', 'packages/core/tsconfig.build.json'],
+  ['scripts/build-package.mjs', 'packages/reporters/tsconfig.build.json'],
   ['scripts/build-package.mjs', 'packages/pipelines/tsconfig.build.json'],
   ['scripts/build-package.mjs', 'packages/cli/tsconfig.build.json'],
   ['scripts/build-package.mjs', 'tsconfig.build.json', '--chmod', 'dist/cli'],

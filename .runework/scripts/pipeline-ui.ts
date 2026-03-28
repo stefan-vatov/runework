@@ -1,4 +1,4 @@
-import React, { createElement, useEffect, useReducer, useState } from 'react'
+import { createElement, useEffect, useReducer, useState } from 'react'
 import { Box, Text, render, useApp } from 'ink'
 import Spinner from 'ink-spinner'
 import { runPipeline, type PipelineResult } from 'runework/pipelines'
@@ -286,6 +286,9 @@ function renderJob(job: PipelineJobState) {
   const outputLines = job.status === 'running' || job.status === 'failed'
     ? job.output
     : []
+  const showPendingOutputHint = job.status === 'running'
+    && outputLines.length === 0
+    && Boolean(job.provider)
 
   return h(
     Box,
@@ -302,6 +305,17 @@ function renderJob(job: PipelineJobState) {
         job.detail ? h(Text, { dimColor: true }, `  ${job.detail}`) : null,
       ),
     ),
+    showPendingOutputHint
+      ? h(
+        Box,
+        { marginLeft: 2 },
+        h(
+          Text,
+          { color: 'gray', dimColor: true, wrap: 'truncate-end' },
+          `… waiting for first readable ${job.provider} event`,
+        ),
+      )
+      : null,
     ...outputLines.map((line, index) =>
       h(
         Box,

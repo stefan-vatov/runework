@@ -14,6 +14,7 @@ test('buildCodexArgs places root and exec flags where codex expects them', () =>
       cwd: '/repo',
       model: 'gpt-5.4',
       sandbox: 'workspace-write',
+      approvalMode: 'never',
       schema: { type: 'object' },
       extraArgs: ['--skip-git-repo-check'],
     },
@@ -28,6 +29,8 @@ test('buildCodexArgs places root and exec flags where codex expects them', () =>
     '/repo',
     '-s',
     'workspace-write',
+    '-a',
+    'never',
     'exec',
     '--output-schema',
     '/tmp/codex-schema.json',
@@ -127,11 +130,11 @@ test('providers reject unsupported request options instead of ignoring them', ()
     () =>
       buildCodexArgs({
         prompt: 'Review this change',
-        approvalMode: 'on-request',
+        sessionName: 'review',
       }, {
         outputFile: '/tmp/codex-last-message.txt',
       }),
-    /codex does not support request option\(s\): approvalMode/,
+    /codex does not support request option\(s\): sessionName/,
   )
 
   assert.throws(

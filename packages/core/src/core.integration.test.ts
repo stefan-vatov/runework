@@ -8,6 +8,7 @@ import { ClaudeAdapter } from './adapters/claude.ts'
 import { CodexAdapter } from './adapters/codex.ts'
 import { OpenCodeAdapter } from './adapters/opencode.ts'
 import type { AgentOutputChunk } from './adapters/types.ts'
+import { detectTools } from './core/detect.ts'
 import { runCli, type CliOutputChunk } from './core/run-cli.ts'
 
 async function createFakeCli(
@@ -96,6 +97,45 @@ test('runCli aborts promptly and preserves the callback error when streaming fai
     Date.now() - startedAt < 500,
     `expected runCli to abort promptly, took ${Date.now() - startedAt}ms`,
   )
+})
+
+test('detectTools resolves executables from PATH without relying on locator binaries', async (t) => {
+  const fake = await createFakeCli(
+    t,
+    'codex',
+    [
+      '#!/usr/bin/env node',
+      'const args = process.argv.slice(2)',
+      "if (args.includes('--version')) {",
+      "  process.stdout.write('codex fake 1.0.0\\n')",
+      '  process.exit(0)',
+      '}',
+      'process.exit(0)',
+      '',
+    ].join('\n'),
+  )
+
+  await writeFile(join(fake.binDir, 'node'), [
+    '#!/bin/sh',
+    `exec "${process.execPath}" "$@"`,
+    '',
+  ].join('\n'), 'utf8')
+  await chmod(join(fake.binDir, 'node'), 0o755)
+
+  const previousPath = process.env.PATH
+  process.env.PATH = fake.binDir
+  t.after(() => {
+    process.env.PATH = previousPath
+  })
+
+  const [tool] = await detectTools(['codex'])
+
+  assert.deepEqual(tool, {
+    name: 'codex',
+    available: true,
+    path: join(fake.binDir, 'codex'),
+    version: 'codex fake 1.0.0',
+  })
 })
 
 test('ClaudeAdapter streams realtime CLI output through the shared adapter contract', async (t) => {

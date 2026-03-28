@@ -76,11 +76,11 @@
     "test:publish": "node --conditions=source --test \"src/*.publish.test.ts\"",
     "typecheck": "tsc -b",
     "lint": "eslint .",
-    "lint:all": "npx nx run-many -t lint --all",
+    "lint:all": "npm run lint",
     "build:all": "node scripts/build.mjs",
     "run": "node --conditions=source src/cli/run.ts",
     "detect": "node --conditions=source src/cli/detect.ts",
-    "pipeline": "node --conditions=source src/cli/pipeline.ts"
+    "pipeline": "node --conditions=source .runework/scripts/pipeline.ts"
   },
   "dependencies": {
     "@runework/cli": "0.1.1",

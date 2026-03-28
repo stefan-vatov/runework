@@ -6,29 +6,42 @@
 
 ```text
 runework/
-  scripts/
-    build.mjs          # workspace build entrypoint
-  src/
-    core/
-      run-cli.ts       # shared zx-backed CLI execution
-      journal.ts       # write run logs under .runework/.work/
-      json.ts          # safeJsonParse, parseJsonLines, toText
-      render-template.ts
-      detect.ts        # installed tool detection
-    adapters/
-      types.ts
-      codex.ts
-      claude.ts
-      opencode.ts
-      registry.ts
-    pipelines/
-      runtime.ts       # durable steps, checkpoints, child runs, resume
-      runner.ts        # load user-authored pipelines from .runework/pipelines/
-    cli/
+  packages/
+    core/src/
+      core/
+        run-cli.ts       # shared zx-backed CLI execution
+        journal.ts       # write run logs under .runework/.work/
+        json.ts          # safeJsonParse, parseJsonLines, toText
+        render-template.ts
+        detect.ts        # installed tool detection
+      adapters/
+        types.ts
+        codex.ts
+        claude.ts
+        opencode.ts
+        registry.ts
+    pipelines/src/
+      runtime.ts         # durable steps, checkpoints, child runs, resume
+      runner.ts          # load user-authored pipelines from .runework/pipelines/
+    cli/src/
       run.ts
       detect.ts
       init.ts
       pipeline.ts
+    reporters/src/
+      ...                # optional adjacent reporter utilities, not exported by root package
+  scripts/
+    build.mjs          # workspace build entrypoint
+  src/
+    index.ts           # root compatibility facade
+    core/
+      index.ts         # root core re-exports
+    adapters/
+      index.ts         # root adapter re-exports
+    pipelines/
+      index.ts         # root pipeline re-exports
+    cli/
+      *.ts             # root executable entrypoints
   templates/
     runework/
       package.json.tmpl
@@ -50,6 +63,7 @@ The package uses conditional exports:
 ```
 
 - `node --conditions=source` resolves to `src/*.ts` for repository development.
+- The root `src/*.ts` files are thin facades and entrypoints over the workspace packages.
 - TypeScript and editors resolve to `dist/*.d.ts`.
 - Standard Node resolution uses `dist/*.js` for installed consumers.
 

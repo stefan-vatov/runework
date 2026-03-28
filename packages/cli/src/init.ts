@@ -1,7 +1,6 @@
-import { cp, mkdir, readFile, rm, writeFile, stat } from 'node:fs/promises'
+import { chmod, cp, mkdir, readdir, readFile, rm, writeFile, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { $ } from 'zx'
-import { renderTemplate } from '@runework/core'
+import { renderTemplate, runCli } from '@runework/core'
 import { ensureGitignoreEntries } from '@runework/pipelines'
 import { defaultRuneworkDependency } from './helpers.ts'
 
@@ -10,6 +9,7 @@ export type InitDeps = {
   packageVersion: string
   templatesRuneworkDir: string
   currentDir: string
+  runCliFn?: typeof runCli
 }
 
 function parseArgs(argv: string[]) {
@@ -43,6 +43,40 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+async function chmodTemplateScripts(runeworkDir: string): Promise<void> {
+  if (process.platform === 'win32') return
+
+  const scriptsDir = join(runeworkDir, 'scripts')
+  const entries = await readdir(scriptsDir).catch(() => [])
+
+  await Promise.all(
+    entries
+      .filter((entry) => entry.endsWith('.ts'))
+      .map((entry) => chmod(join(scriptsDir, entry), 0o755)),
+  )
+}
+
+async function installRuneworkDependencies(
+  runeworkDir: string,
+  runCliFn: typeof runCli,
+): Promise<void> {
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  const result = await runCliFn({
+    bin: npmCommand,
+    args: ['install'],
+    cwd: runeworkDir,
+    onOutputChunk: ({ stream, text }) => {
+      if (stream === 'stdout') process.stdout.write(text)
+      else process.stderr.write(text)
+    },
+  })
+
+  if (result.ok) return
+
+  const detail = result.stderr.trim() || result.stdout.trim() || 'npm install failed'
+  throw new Error(detail)
+}
+
 export async function initCommand(argv: string[], deps: InitDeps): Promise<number> {
   const flags = parseArgs(argv)
   const runeworkDir = join(flags.targetDir, '.runework')
@@ -74,23 +108,21 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
 
   // 3. Copy tsconfig.json.
   await cp(join(deps.templatesRuneworkDir, 'tsconfig.json'), join(runeworkDir, 'tsconfig.json'))
+  await chmodTemplateScripts(runeworkDir)
 
-  // 4. Scripts are user-authored. Keep the scaffold blank but executable-safe.
-  await $({ quiet: true, nothrow: true })`chmod +x ${join(runeworkDir, 'scripts')}/*.ts`
-
-  // 5. Update .gitignore.
+  // 4. Update .gitignore.
   await ensureGitignoreEntries(flags.targetDir, [
     '.runework/node_modules',
     '.runework/.work',
   ])
 
-  // 6. Install dependencies.
+  // 5. Install dependencies.
   if (!flags.noInstall) {
     console.error('runework: installing dependencies...')
-    await $({ cwd: runeworkDir, quiet: false })`npm install`
+    await installRuneworkDependencies(runeworkDir, deps.runCliFn ?? runCli)
   }
 
-  // 7. Summary.
+  // 6. Summary.
   console.error('')
   console.error('runework: initialized .runework/ directory')
   console.error('')

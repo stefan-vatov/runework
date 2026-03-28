@@ -1,4 +1,9 @@
-import { listPipelines, runPipeline, PipelineRunError } from '@runework/pipelines'
+import {
+  listPipelines,
+  runPipeline,
+  PipelineRunError,
+  type PipelineProgressEvent,
+} from '@runework/pipelines'
 import { resolveRuneworkDir } from './helpers.ts'
 
 function parseOptions(args: string[]): {
@@ -31,6 +36,17 @@ function parseOptions(args: string[]): {
   return { pipelineOptions, resumeRunId }
 }
 
+function formatProgressEvent(event: PipelineProgressEvent): string {
+  try {
+    const text = JSON.stringify(event)
+    if (text) return text
+  } catch {
+    // Fall back to a coarse string so progress is never silently dropped.
+  }
+
+  return String(event.type ?? '[progress]')
+}
+
 export async function pipelineCommand(argv: string[] = process.argv.slice(2)): Promise<number> {
   const [pipelineName, ...rest] = argv
   const runeworkDir = resolveRuneworkDir()
@@ -54,6 +70,9 @@ export async function pipelineCommand(argv: string[] = process.argv.slice(2)): P
       resumeRunId,
       log: (message) => {
         console.error(message)
+      },
+      onProgress: (event) => {
+        console.error(formatProgressEvent(event))
       },
     })
     console.error(result.summary)

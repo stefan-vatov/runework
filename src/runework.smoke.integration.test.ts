@@ -41,6 +41,10 @@ function buildWorkspace(repoRoot: string) {
       label: 'building @runework/core failed',
     },
     {
+      args: ['scripts/build-package.mjs', 'packages/reporters/tsconfig.build.json'],
+      label: 'building @runework/reporters failed',
+    },
+    {
       args: ['scripts/build-package.mjs', 'packages/pipelines/tsconfig.build.json'],
       label: 'building @runework/pipelines failed',
     },
@@ -166,5 +170,26 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
   assertSucceeded(
     pipelineImport,
     'generated pipeline failed to import against the packed artifact',
+  )
+
+  const reportersImport = runCommand(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      "await import('runework/reporters')",
+    ],
+    consumerDir,
+  )
+  assert.notEqual(
+    reportersImport.status,
+    0,
+    'packed runtime unexpectedly exported runework/reporters',
+  )
+  assert.match(
+    [reportersImport.stdout, reportersImport.stderr, reportersImport.error?.message]
+      .filter(Boolean)
+      .join('\n'),
+    /runework\/reporters|ERR_PACKAGE_PATH_NOT_EXPORTED|Cannot find module/,
   )
 })

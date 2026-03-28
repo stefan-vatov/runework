@@ -91,11 +91,17 @@ You author the scripts, prompts, and policies inside that target repo. `runework
 ## Layout
 
 ```text
-src/
-  adapters/     provider wrappers and argv builders
-  cli/          thin entrypoints
-  core/         execution, templating, journaling, JSON helpers
+packages/
+  core/         adapters, execution, templating, journaling, JSON helpers
   pipelines/    durable local pipeline runtime
+  cli/          thin CLI command implementations
+  reporters/    adjacent reporter utilities kept out of the root runtime surface
+src/
+  index.ts      root compatibility facade
+  adapters/     root adapter re-exports
+  core/         root core re-exports
+  pipelines/    root pipeline re-exports
+  cli/          root entrypoints
 scripts/
   build.mjs     clean build + CLI permission fixup
 templates/

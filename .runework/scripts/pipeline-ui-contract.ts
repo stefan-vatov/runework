@@ -90,6 +90,9 @@ function extractJsonTexts(value: unknown): string[] {
   if (!isRecord(value)) return []
 
   const record = value
+  if (record.type === 'thread.started') return ['session started']
+  if (record.type === 'turn.started') return ['thinking...']
+
   const delta = isRecord(record.delta) ? record.delta : undefined
   const part = isRecord(record.part) ? record.part : undefined
   const item = isRecord(record.item) ? record.item : undefined
@@ -189,9 +192,15 @@ export function createAgentStreamReporter(
 } {
   let stdoutBuffer = ''
   let stderrBuffer = ''
+  let didEmitLaunchLine = false
 
   return {
     onOutputChunk(chunk) {
+      if (!didEmitLaunchLine && job.provider) {
+        didEmitLaunchLine = true
+        emitOutputLines(sink, job, 'stdout', `launching ${job.provider}...`)
+      }
+
       if (chunk.stream === 'stdout') {
         stdoutBuffer = flushLines(sink, job, 'stdout', stdoutBuffer + chunk.text, true)
         return

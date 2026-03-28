@@ -46,7 +46,7 @@ function extractLastAgentMessage(events: unknown[]): string | undefined {
 }
 
 export const CODEX_CAPABILITIES: AgentAdapterCapabilities = {
-  approvalMode: false,
+  approvalMode: true,
   files: false,
   sandbox: true,
   schema: true,
@@ -68,6 +68,7 @@ export function buildCodexArgs(
 
   if (request.cwd) args.push('-C', request.cwd)
   if (request.sandbox) args.push('-s', request.sandbox)
+  if (request.approvalMode) args.push('-a', request.approvalMode)
 
   args.push('exec')
 
@@ -99,7 +100,7 @@ export function buildCodexArgs(
  * Adapter for OpenAI Codex CLI.
  *
  * Supports: --json events, --output-last-message, --output-schema,
- * sandbox, stdin prompt via `-`, resume.
+ * sandbox, approval mode, stdin prompt via `-`, resume.
  */
 export class CodexAdapter implements AgentAdapter {
   readonly name = 'codex'

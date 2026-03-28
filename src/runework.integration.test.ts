@@ -39,7 +39,7 @@ function assertSucceeded(result: SpawnSyncReturns<string>, label: string): void 
 }
 
 function resolveCommandPath(command: string): string {
-  const locator = process.platform === 'win32' ? 'where' : 'which'
+  const locator = resolveToolLocatorCommand()
   const result = spawnSync(locator, [command], {
     encoding: 'utf8',
   })
@@ -47,6 +47,10 @@ function resolveCommandPath(command: string): string {
   const path = result.stdout.split('\n').map((line) => line.trim()).find(Boolean)
   assert.ok(path, `failed to resolve ${command}`)
   return path
+}
+
+function resolveToolLocatorCommand(): string {
+  return process.platform === 'win32' ? 'where' : 'which'
 }
 
 async function linkExecutable(binDir: string, name: string, target: string): Promise<void> {
@@ -190,10 +194,11 @@ async function createFakeCodexCli(t: { after: (cleanup: () => Promise<void> | vo
   const scriptPath = join(binDir, 'codex')
   await writeFile(scriptPath, script, 'utf8')
   await chmod(scriptPath, 0o755)
+  const locator = resolveToolLocatorCommand()
   await Promise.all([
     linkExecutable(binDir, 'git', resolveCommandPath('git')),
     linkExecutable(binDir, 'node', process.execPath),
-    linkExecutable(binDir, 'which', resolveCommandPath('which')),
+    linkExecutable(binDir, locator, resolveCommandPath(locator)),
   ])
 
   return { binDir, logPath }
@@ -232,10 +237,11 @@ async function createFakeClaudeCli(t: { after: (cleanup: () => Promise<void> | v
   const scriptPath = join(binDir, 'claude')
   await writeFile(scriptPath, script, 'utf8')
   await chmod(scriptPath, 0o755)
+  const locator = resolveToolLocatorCommand()
   await Promise.all([
     linkExecutable(binDir, 'git', resolveCommandPath('git')),
     linkExecutable(binDir, 'node', process.execPath),
-    linkExecutable(binDir, 'which', resolveCommandPath('which')),
+    linkExecutable(binDir, locator, resolveCommandPath(locator)),
   ])
 
   return { binDir, logPath }
