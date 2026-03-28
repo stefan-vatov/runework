@@ -5,6 +5,12 @@ import { $ } from 'runework/zx'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
+import {
+  createAgentStreamReporter,
+  emitDogfoodJob,
+  emitDogfoodRun,
+  type DogfoodJobDescriptor,
+} from '../scripts/pipeline-ui-contract.ts'
 
 const CODEX_MODEL = 'gpt-5.4'
 const CODEX_EXTRA_ARGS = ['--full-auto', '--config', 'model_reasoning_effort=xhigh']
@@ -39,6 +45,7 @@ type AlignmentPhaseContext = {
   readonly state: Readonly<AlignmentRuntimeState>
   readonly cycle: number
   log(message: string): void
+  progress: PipelineContext['progress']
   writeOutput(filename: string, content: string): Promise<string>
   writePhaseOutput(filename: string, content: string): Promise<string>
 }
@@ -49,6 +56,13 @@ const pipeline = defineWorkflowPipeline({
   async run(ctx) {
     const config = await buildConfig(ctx.repoRoot)
     await ensureStableConfig(ctx, 'config', config)
+    emitDogfoodRun(ctx, {
+      pipelineName: 'constitutional-alignment',
+      title: 'Constitutional Alignment',
+      subtitle: `${ALIGNMENT_CYCLE_COUNT} cycles • ${CODEX_MODEL}`,
+      runId: ctx.runId,
+      resumed: ctx.isResume,
+    })
 
     let state = buildInitialState()
 
@@ -127,10 +141,43 @@ function createAlignmentPhaseContext(
     state,
     cycle,
     log: ctx.log,
+    progress: ctx.progress,
     writeOutput: ctx.writeOutput,
     writePhaseOutput(filename, content) {
       return ctx.writeOutput(join(phaseOutputDir, filename), content)
     },
+  }
+}
+
+function buildDetectToolsJobDescriptor(): DogfoodJobDescriptor {
+  return {
+    id: 'prepare:detect-tools',
+    label: 'detect tools',
+    group: 'prepare',
+    order: 10,
+    cycle: 0,
+  }
+}
+
+function buildAlignmentJobDescriptor(cycle: number): DogfoodJobDescriptor {
+  return {
+    id: `cycle:${cycle}:align:review-and-fix`,
+    label: 'constitutional alignment',
+    group: `cycle ${cycle} / align`,
+    order: 10,
+    provider: 'codex',
+    cycle,
+  }
+}
+
+function buildCommitJobDescriptor(cycle: number): DogfoodJobDescriptor {
+  return {
+    id: `cycle:${cycle}:commit:commit-changes`,
+    label: 'create commit',
+    group: `cycle ${cycle} / commit`,
+    order: 10,
+    provider: 'codex',
+    cycle,
   }
 }
 
@@ -292,6 +339,14 @@ async function hasStagedChanges(repoRoot: string): Promise<boolean> {
   return code !== 0
 }
 
+async function rollbackCommit(repoRoot: string, head: string | undefined): Promise<void> {
+  if (!head) {
+    throw new Error('Cannot roll back failed commit: repository had no initial HEAD')
+  }
+
+  await $({ cwd: repoRoot, quiet: true })`git reset --soft ${head}`
+}
+
 async function getLatestCommitMessage(repoRoot: string): Promise<string> {
   return gitStdout(repoRoot, ['log', '-1', '--pretty=%B'], 'Failed to read commit message')
 }
@@ -307,10 +362,28 @@ function validateConventionalCommit(message: string): string | undefined {
   return undefined
 }
 
+function summarizeFailureDetail(text: string): string {
+  const firstLine = text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean)
+
+  if (!firstLine) return 'failed'
+
+  const normalized = firstLine.replace(/^\[error\]\s*/i, '')
+  if (!normalized) return 'failed'
+  if (normalized.length <= 120) return normalized
+  return `${normalized.slice(0, 117)}...`
+}
+
 async function detectAvailableToolsJob(ctx: AlignmentPhaseContext): Promise<AlignmentStatePatch> {
+  const job = buildDetectToolsJobDescriptor()
+  emitDogfoodJob(ctx, job, 'running', 'checking installed CLI tools')
   const codexAvailable = ctx.config.availableTools.includes('codex')
 
   if (!codexAvailable) {
+    emitDogfoodJob(ctx, job, 'failed', 'codex unavailable')
     throw new Error(
       'constitutional-alignment requires Codex CLI because fix and commit passes need workspace-write access. ' +
       'Install codex and try again.',
@@ -327,12 +400,17 @@ async function detectAvailableToolsJob(ctx: AlignmentPhaseContext): Promise<Alig
     ctx.log(`working tree has ${fileCount} dirty file(s) — these will be included in commits`)
   }
 
+  emitDogfoodJob(ctx, job, 'success', ctx.config.availableTools.join(', '))
+
   return { codexAvailable }
 }
 
 async function reviewAndFix(ctx: AlignmentPhaseContext): Promise<AlignmentStatePatch> {
+  const job = buildAlignmentJobDescriptor(ctx.cycle)
+  emitDogfoodJob(ctx, job, 'running', `cycle ${ctx.cycle}`)
   const aligner = codex(CODEX_MODEL)
   const prompt = buildAlignmentPrompt(ctx.config.constitutionText)
+  const streamReporter = createAgentStreamReporter(ctx, job)
 
   let text: string
   let ok: boolean
@@ -343,18 +421,28 @@ async function reviewAndFix(ctx: AlignmentPhaseContext): Promise<AlignmentStateP
       sandbox: 'workspace-write',
       extraArgs: CODEX_EXTRA_ARGS,
       timeoutMs: 60 * 60 * 1000,
+      onOutputChunk: streamReporter.onOutputChunk,
     })
     text = result.text
     ok = result.ok
   } catch (error) {
     text = `[error] ${error instanceof Error ? error.message : String(error)}`
     ok = false
+  } finally {
+    streamReporter.flush()
   }
 
   await ctx.writePhaseOutput('constitutional-alignment.md', text)
   const path = await ctx.writeOutput('constitutional-alignment.md', text)
+  const detail = ok ? `${text.split('\n').length} lines` : summarizeFailureDetail(text)
 
-  ctx.log(`alignment: ${ok ? 'done' : 'failed'} (${text.split('\n').length} lines) → ${path}`)
+  ctx.log(`alignment: ${ok ? 'done' : 'failed'} (${detail}) → ${path}`)
+  emitDogfoodJob(
+    ctx,
+    job,
+    ok ? 'success' : 'failed',
+    detail,
+  )
 
   if (!ok) throw new Error(`Alignment pass failed — see ${path}`)
 
@@ -366,6 +454,8 @@ async function reviewAndFix(ctx: AlignmentPhaseContext): Promise<AlignmentStateP
 }
 
 async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentStatePatch> {
+  const job = buildCommitJobDescriptor(ctx.cycle)
+  emitDogfoodJob(ctx, job, 'running', 'staging changes')
   await $({ cwd: ctx.repoRoot, quiet: true })`git add -A`
 
   if (!await hasStagedChanges(ctx.repoRoot)) {
@@ -373,6 +463,7 @@ async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentState
     await ctx.writePhaseOutput('commit-result.md', text)
     const path = await ctx.writeOutput('commit-result.md', text)
     ctx.log('no changes to commit — skipping')
+    emitDogfoodJob(ctx, job, 'success', 'no changes to commit')
     return {
       commitPath: path,
       commitOk: true,
@@ -382,14 +473,23 @@ async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentState
   }
 
   const committer = codex(CODEX_MODEL)
+  const initialHead = await getHead(ctx.repoRoot)
   let lastFailure: string | undefined
   let lastCreatedCommit = false
+  let needsRollback = false
 
   for (let attempt = 1; attempt <= COMMIT_MAX_ATTEMPTS; attempt += 1) {
     const headBefore = await getHead(ctx.repoRoot)
     const prompt = attempt === 1
       ? COMMIT_PROMPT
       : buildRetryCommitPrompt(lastFailure!, lastCreatedCommit)
+    emitDogfoodJob(
+      ctx,
+      job,
+      'running',
+      `attempt ${attempt} of ${COMMIT_MAX_ATTEMPTS}`,
+    )
+    const streamReporter = createAgentStreamReporter(ctx, job)
 
     let text: string
     let ok: boolean
@@ -400,12 +500,15 @@ async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentState
         sandbox: 'workspace-write',
         extraArgs: CODEX_EXTRA_ARGS,
         timeoutMs: 30 * 60 * 1000,
+        onOutputChunk: streamReporter.onOutputChunk,
       })
       text = result.text
       ok = result.ok
     } catch (error) {
       text = `[error] ${error instanceof Error ? error.message : String(error)}`
       ok = false
+    } finally {
+      streamReporter.flush()
     }
 
     await ctx.writePhaseOutput(`commit-attempt-${attempt}.md`, text)
@@ -422,6 +525,7 @@ async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentState
         await ctx.writePhaseOutput('commit-result.md', resultText)
         const path = await ctx.writeOutput('commit-result.md', resultText)
         ctx.log(`committed: ${message.trim()} → ${path}`)
+        emitDogfoodJob(ctx, job, 'success', message.trim())
         return {
           commitText: text,
           commitPath: path,
@@ -434,10 +538,11 @@ async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentState
 
       lastFailure = `commit message validation failed: ${validationError}`
       lastCreatedCommit = true
+      needsRollback = true
     } else {
       lastFailure = ok
         ? 'model reported success but no new commit was created'
-        : `model failed (attempt ${attempt}): see transcript`
+        : summarizeFailureDetail(text)
       lastCreatedCommit = false
 
       if (attempt < COMMIT_MAX_ATTEMPTS) {
@@ -450,9 +555,22 @@ async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentState
     }
   }
 
+  if (needsRollback) {
+    try {
+      await rollbackCommit(ctx.repoRoot, initialHead)
+      ctx.log('rolled back invalid commit after final failure')
+    } catch (rollbackError) {
+      const rollbackDetail = rollbackError instanceof Error
+        ? rollbackError.message
+        : String(rollbackError)
+      lastFailure = `${lastFailure}; rollback failed: ${rollbackDetail}`
+    }
+  }
+
   const failText = `Commit failed after ${COMMIT_MAX_ATTEMPTS} attempts.\nLast failure: ${lastFailure}`
   await ctx.writePhaseOutput('commit-result.md', failText)
   const failPath = await ctx.writeOutput('commit-result.md', failText)
+  emitDogfoodJob(ctx, job, 'failed', lastFailure)
   throw new Error(`Commit failed after ${COMMIT_MAX_ATTEMPTS} attempts: ${lastFailure} — see ${failPath}`)
 }
 

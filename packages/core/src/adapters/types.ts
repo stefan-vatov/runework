@@ -4,6 +4,14 @@ export type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 
 export type JsonSchema = Record<string, unknown>
 
+export type AgentOutputStreamName = 'stdout' | 'stderr'
+
+export type AgentOutputChunk = {
+  provider: string
+  stream: AgentOutputStreamName
+  text: string
+}
+
 export type AgentRequestOption =
   | 'approvalMode'
   | 'files'
@@ -36,6 +44,8 @@ export type AgentRunRequest = {
   sessionName?: string
   /** Provider-specific extra CLI args — the escape hatch */
   extraArgs?: string[]
+  /** Realtime stdout/stderr chunks emitted by the underlying CLI process */
+  onOutputChunk?: (chunk: AgentOutputChunk) => void
   /** Timeout in ms for the entire run */
   timeoutMs?: number
 }

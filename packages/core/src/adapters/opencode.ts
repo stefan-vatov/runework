@@ -77,6 +77,9 @@ export class OpenCodeAdapter implements AgentAdapter {
       cwd: request.cwd,
       env: request.env,
       stdin: request.prompt,
+      onOutputChunk: request.onOutputChunk
+        ? (chunk) => request.onOutputChunk?.({ provider: this.name, ...chunk })
+        : undefined,
       timeoutMs: request.timeoutMs,
     })
 

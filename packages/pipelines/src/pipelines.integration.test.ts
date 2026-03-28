@@ -280,3 +280,111 @@ test('repeatUntil checkpoints loop state for resumed runs', async (t) => {
     JSON.stringify({ value: 3 }),
   )
 })
+
+test('runPipeline preserves parallel step results and outputs across resume', async (t) => {
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-parallel-steps-'))
+  t.after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  const runeworkDir = join(tmpRoot, '.runework')
+  await writePipeline(
+    runeworkDir,
+    'parallel-steps',
+    [
+      "import { readFile, writeFile } from 'node:fs/promises'",
+      "import { join } from 'node:path'",
+      '',
+      'function wait(ms) {',
+      '  return new Promise((resolve) => setTimeout(resolve, ms))',
+      '}',
+      '',
+      'async function bump(path) {',
+      "  const raw = await readFile(path, 'utf8').catch(() => '0')",
+      '  const next = Number(raw) + 1',
+      "  await writeFile(path, String(next), 'utf8')",
+      '  return next',
+      '}',
+      '',
+      'export default async function pipeline(ctx) {',
+      "  const leftCountPath = join(ctx.repoRoot, 'left-count.txt')",
+      "  const rightCountPath = join(ctx.repoRoot, 'right-count.txt')",
+      '  const [left, right] = await Promise.all([',
+      "    ctx.step('left', async () => {",
+      '      await wait(10)',
+      '      const count = await bump(leftCountPath)',
+      "      const output = await ctx.writeOutput('left.txt', `left-${count}`)",
+      '      return { count, output }',
+      '    }),',
+      "    ctx.step('right', async () => {",
+      '      await wait(5)',
+      '      const count = await bump(rightCountPath)',
+      "      const output = await ctx.writeOutput('right.txt', `right-${count}`)",
+      '      return { count, output }',
+      '    }),',
+      '  ])',
+      "  const failedOnce = await ctx.getCheckpoint('failed-once')",
+      '  if (!failedOnce) {',
+      "    await ctx.checkpoint('failed-once', true)",
+      "    throw new Error('fail once after parallel steps')",
+      '  }',
+      "  return { ok: true, outputPath: left.output, outputs: { left: left.output, right: right.output }, summary: 'parallel done' }",
+      '}',
+      '',
+    ].join('\n'),
+  )
+
+  const runId = 'parallel-run'
+  await assert.rejects(
+    () => runPipeline('parallel-steps', runeworkDir, { runId }),
+    /fail once after parallel steps/,
+  )
+
+  const state = JSON.parse(
+    await readFile(join(runeworkDir, '.work', 'parallel-steps', runId, 'workflow-state.json'), 'utf8'),
+  ) as {
+    outputs: Record<string, string>
+    stepResults: Record<string, unknown>
+  }
+  assert.deepEqual(Object.keys(state.stepResults).sort(), ['left', 'right'])
+  assert.ok(state.outputs['left.txt']?.endsWith('/left.txt'))
+  assert.ok(state.outputs['right.txt']?.endsWith('/right.txt'))
+
+  const resumed = await runPipeline('parallel-steps', runeworkDir, { resumeRunId: runId })
+  assert.equal(resumed.ok, true)
+  assert.equal(await readFile(join(tmpRoot, 'left-count.txt'), 'utf8'), '1')
+  assert.equal(await readFile(join(tmpRoot, 'right-count.txt'), 'utf8'), '1')
+})
+
+test('runPipeline de-duplicates concurrent step calls with the same step ID', async (t) => {
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-duplicate-step-'))
+  t.after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  const runeworkDir = join(tmpRoot, '.runework')
+  await writePipeline(
+    runeworkDir,
+    'duplicate-step',
+    [
+      "import { appendFile } from 'node:fs/promises'",
+      "import { join } from 'node:path'",
+      '',
+      'export default async function pipeline(ctx) {',
+      "  const logPath = join(ctx.repoRoot, 'step.log')",
+      '  const run = async () => {',
+      "    await appendFile(logPath, 'same\\n', 'utf8')",
+      '    return 1',
+      '  }',
+      "  const [left, right] = await Promise.all([ctx.step('same', run), ctx.step('same', run)])",
+      "  return { ok: true, summary: `${left}:${right}` }",
+      '}',
+      '',
+    ].join('\n'),
+  )
+
+  const result = await runPipeline('duplicate-step', runeworkDir, { log: () => {} })
+  assert.equal(result.ok, true)
+  assert.equal(result.summary, '1:1')
+  assert.equal(await readFile(join(tmpRoot, 'step.log'), 'utf8'), 'same\n')
+})

@@ -106,6 +106,22 @@ test('buildClaudeArgs keeps large prompts off argv', () => {
   assert.ok(args.join(' ').length < 1024)
 })
 
+test('buildClaudeArgs switches to stream-json when realtime output streaming is requested', () => {
+  const args = buildClaudeArgs({
+    prompt: 'Stream the run',
+    onOutputChunk: () => {},
+  })
+
+  assert.deepEqual(args, [
+    '-p',
+    '--input-format',
+    'text',
+    '--output-format',
+    'stream-json',
+    '--include-partial-messages',
+  ])
+})
+
 test('providers reject unsupported request options instead of ignoring them', () => {
   assert.throws(
     () =>

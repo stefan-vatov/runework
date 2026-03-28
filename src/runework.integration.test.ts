@@ -64,13 +64,19 @@ async function createDogfoodRepo(t: { after: (cleanup: () => Promise<void>) => v
   const repoRoot = join(tmpRoot, 'repo')
   const runeworkDir = join(repoRoot, '.runework')
   await mkdir(join(runeworkDir, 'pipelines'), { recursive: true })
+  await mkdir(join(runeworkDir, 'scripts'), { recursive: true })
   await mkdir(join(runeworkDir, 'node_modules'), { recursive: true })
 
   const reviewPipeline = await readFile(
     join(process.cwd(), '.runework', 'pipelines', 'code-review.ts'),
     'utf8',
   )
+  const pipelineUiContract = await readFile(
+    join(process.cwd(), '.runework', 'scripts', 'pipeline-ui-contract.ts'),
+    'utf8',
+  )
   await writeFile(join(runeworkDir, 'pipelines', 'code-review.ts'), reviewPipeline, 'utf8')
+  await writeFile(join(runeworkDir, 'scripts', 'pipeline-ui-contract.ts'), pipelineUiContract, 'utf8')
   await symlink(process.cwd(), join(runeworkDir, 'node_modules', 'runework'), 'dir')
   await writeFile(join(repoRoot, 'README.md'), '# temp repo\n', 'utf8')
   await writeFile(join(repoRoot, '.gitignore'), '.runework/node_modules/\n.runework/.work/\n', 'utf8')
@@ -88,7 +94,17 @@ async function createDogfoodRepo(t: { after: (cleanup: () => Promise<void>) => v
     'git config user.email failed in dogfood repo',
   )
   assertSucceeded(
-    runCommand('git', ['add', 'README.md', '.gitignore', '.runework/pipelines/code-review.ts'], repoRoot),
+    runCommand(
+      'git',
+      [
+        'add',
+        'README.md',
+        '.gitignore',
+        '.runework/pipelines/code-review.ts',
+        '.runework/scripts/pipeline-ui-contract.ts',
+      ],
+      repoRoot,
+    ),
     'git add failed in dogfood repo',
   )
   assertSucceeded(
@@ -118,6 +134,7 @@ async function createFakeCodexCli(t: { after: (cleanup: () => Promise<void> | vo
     '#!/usr/bin/env node',
     "const fs = require('node:fs')",
     "const path = require('node:path')",
+    "const { spawnSync } = require('node:child_process')",
     'const args = process.argv.slice(2)',
     "if (args.includes('--version') || args.includes('-V') || args.includes('version')) {",
     "  process.stdout.write('codex fake 1.0.0\\n')",
@@ -129,16 +146,45 @@ async function createFakeCodexCli(t: { after: (cleanup: () => Promise<void> | vo
     "const outputIndex = args.indexOf('--output-last-message')",
     'const outputFile = outputIndex >= 0 ? args[outputIndex + 1] : undefined',
     "const isWritableRun = args.includes('workspace-write')",
+    "const isCommitRun = stdin.includes('You are a developer committing code changes.') || stdin.includes('You are a developer fixing a failed commit attempt.')",
     'const fixRelativePath = process.env.RUNEWORK_FAKE_CODEX_FIX_RELATIVE_PATH',
     'const fixContent = process.env.RUNEWORK_FAKE_CODEX_FIX_CONTENT',
+    'const commitScenario = process.env.RUNEWORK_FAKE_CODEX_COMMIT_SCENARIO',
+    'const commitStatePath = process.env.RUNEWORK_FAKE_CODEX_COMMIT_STATE',
+    'const alignRelativePath = process.env.RUNEWORK_FAKE_CODEX_ALIGN_RELATIVE_PATH',
+    'const alignContent = process.env.RUNEWORK_FAKE_CODEX_ALIGN_CONTENT',
     "const reviewText = process.env.RUNEWORK_FAKE_CODEX_REVIEW_TEXT ?? '## Must Fix\\n- None\\n\\n## Should Fix\\n- None\\n\\n## Consider\\n- None\\n\\n## Summary\\n- None\\n'",
     "const fixText = process.env.RUNEWORK_FAKE_CODEX_FIX_TEXT ?? 'applied fixes'",
-    'const text = isWritableRun ? fixText : reviewText',
-    "if (isWritableRun && fixRelativePath && fixContent !== undefined) {",
-    "  fs.writeFileSync(path.join(process.cwd(), fixRelativePath), fixContent, 'utf8')",
-    '}',
-    "if (outputFile) fs.writeFileSync(outputFile, text, 'utf8')",
-    "process.stdout.write(JSON.stringify({ type: 'message', session_id: 'fake-codex-session' }) + '\\n')",
+    "const commitText = process.env.RUNEWORK_FAKE_CODEX_COMMIT_TEXT ?? 'commit attempted'",
+    "const delayMs = Number(process.env.RUNEWORK_FAKE_CODEX_DELAY_MS ?? '0')",
+    'const streamText = process.env.RUNEWORK_FAKE_CODEX_STREAM_TEXT',
+    'const text = isCommitRun ? commitText : isWritableRun ? fixText : reviewText',
+    "const emitStreamText = Boolean(streamText && stdin.includes('principal engineer synthesizing independent code reviews'))",
+    'setTimeout(() => {',
+    "  if (commitScenario === 'invalid-then-fail' && isCommitRun) {",
+    "    const rawAttempt = commitStatePath && fs.existsSync(commitStatePath) ? fs.readFileSync(commitStatePath, 'utf8').trim() : '0'",
+    "    const attempt = Number(rawAttempt || '0') + 1",
+    "    if (commitStatePath) fs.writeFileSync(commitStatePath, String(attempt), 'utf8')",
+    '    if (attempt === 1) {',
+    "      const commit = spawnSync('git', ['-c', 'commit.gpgsign=false', 'commit', '-m', 'bad commit'], { cwd: process.cwd(), encoding: 'utf8' })",
+    "      if (outputFile) fs.writeFileSync(outputFile, 'created invalid commit', 'utf8')",
+    "      process.stdout.write(JSON.stringify({ type: 'message', session_id: 'fake-codex-session' }) + '\\n')",
+    '      process.exit(commit.status ?? 0)',
+    '    }',
+    "    if (outputFile) fs.writeFileSync(outputFile, '[error] retry failed', 'utf8')",
+    "    process.stdout.write(JSON.stringify({ type: 'message', session_id: 'fake-codex-session' }) + '\\n')",
+    '    process.exit(1)',
+    '  }',
+    "  if (isWritableRun && !isCommitRun && alignRelativePath && alignContent !== undefined && stdin.includes('constitutional alignment review')) {",
+    "    fs.writeFileSync(path.join(process.cwd(), alignRelativePath), alignContent, 'utf8')",
+    '  }',
+    "  if (isWritableRun && !isCommitRun && fixRelativePath && fixContent !== undefined) {",
+    "    fs.writeFileSync(path.join(process.cwd(), fixRelativePath), fixContent, 'utf8')",
+    '  }',
+    "  if (outputFile) fs.writeFileSync(outputFile, text, 'utf8')",
+    "  if (emitStreamText) process.stdout.write(JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: streamText } }) + '\\n')",
+    "  process.stdout.write(JSON.stringify({ type: 'message', session_id: 'fake-codex-session' }) + '\\n')",
+    "}, delayMs)",
   ].join('\n')
 
   const scriptPath = join(binDir, 'codex')
@@ -175,9 +221,12 @@ async function createFakeClaudeCli(t: { after: (cleanup: () => Promise<void> | v
     'const logPath = process.env.RUNEWORK_FAKE_CLAUDE_LOG',
     "if (logPath) fs.appendFileSync(logPath, JSON.stringify({ args, stdin }) + '\\n')",
     "const exitCode = Number(process.env.RUNEWORK_FAKE_CLAUDE_EXIT_CODE ?? '0')",
-    'if (exitCode !== 0) process.exit(exitCode)',
     "const result = process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT ?? '## Must Fix\\n- None\\n\\n## Should Fix\\n- None\\n\\n## Consider\\n- None\\n\\n## Summary\\n- None\\n'",
-    "process.stdout.write(JSON.stringify({ result, session_id: 'fake-claude-session' }))",
+    "const delayMs = Number(process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS ?? '0')",
+    'setTimeout(() => {',
+    '  if (exitCode !== 0) process.exit(exitCode)',
+    "  process.stdout.write(JSON.stringify({ result, session_id: 'fake-claude-session' }))",
+    "}, delayMs)",
   ].join('\n')
 
   const scriptPath = join(binDir, 'claude')
@@ -209,6 +258,13 @@ function withFakeCodexEnv(
     fixText?: string
     fixRelativePath?: string
     fixContent?: string
+    alignRelativePath?: string
+    alignContent?: string
+    commitScenario?: string
+    commitStatePath?: string
+    commitText?: string
+    delayMs?: string
+    streamText?: string
   },
 ): void {
   const previous = {
@@ -220,6 +276,13 @@ function withFakeCodexEnv(
     RUNEWORK_FAKE_CODEX_FIX_TEXT: process.env.RUNEWORK_FAKE_CODEX_FIX_TEXT,
     RUNEWORK_FAKE_CODEX_FIX_RELATIVE_PATH: process.env.RUNEWORK_FAKE_CODEX_FIX_RELATIVE_PATH,
     RUNEWORK_FAKE_CODEX_FIX_CONTENT: process.env.RUNEWORK_FAKE_CODEX_FIX_CONTENT,
+    RUNEWORK_FAKE_CODEX_ALIGN_RELATIVE_PATH: process.env.RUNEWORK_FAKE_CODEX_ALIGN_RELATIVE_PATH,
+    RUNEWORK_FAKE_CODEX_ALIGN_CONTENT: process.env.RUNEWORK_FAKE_CODEX_ALIGN_CONTENT,
+    RUNEWORK_FAKE_CODEX_COMMIT_SCENARIO: process.env.RUNEWORK_FAKE_CODEX_COMMIT_SCENARIO,
+    RUNEWORK_FAKE_CODEX_COMMIT_STATE: process.env.RUNEWORK_FAKE_CODEX_COMMIT_STATE,
+    RUNEWORK_FAKE_CODEX_COMMIT_TEXT: process.env.RUNEWORK_FAKE_CODEX_COMMIT_TEXT,
+    RUNEWORK_FAKE_CODEX_DELAY_MS: process.env.RUNEWORK_FAKE_CODEX_DELAY_MS,
+    RUNEWORK_FAKE_CODEX_STREAM_TEXT: process.env.RUNEWORK_FAKE_CODEX_STREAM_TEXT,
   }
 
   process.env.PATH = env.binDir
@@ -242,6 +305,41 @@ function withFakeCodexEnv(
   } else {
     delete process.env.RUNEWORK_FAKE_CODEX_FIX_CONTENT
   }
+  if (env.alignRelativePath !== undefined) {
+    process.env.RUNEWORK_FAKE_CODEX_ALIGN_RELATIVE_PATH = env.alignRelativePath
+  } else {
+    delete process.env.RUNEWORK_FAKE_CODEX_ALIGN_RELATIVE_PATH
+  }
+  if (env.alignContent !== undefined) {
+    process.env.RUNEWORK_FAKE_CODEX_ALIGN_CONTENT = env.alignContent
+  } else {
+    delete process.env.RUNEWORK_FAKE_CODEX_ALIGN_CONTENT
+  }
+  if (env.commitScenario !== undefined) {
+    process.env.RUNEWORK_FAKE_CODEX_COMMIT_SCENARIO = env.commitScenario
+  } else {
+    delete process.env.RUNEWORK_FAKE_CODEX_COMMIT_SCENARIO
+  }
+  if (env.commitStatePath !== undefined) {
+    process.env.RUNEWORK_FAKE_CODEX_COMMIT_STATE = env.commitStatePath
+  } else {
+    delete process.env.RUNEWORK_FAKE_CODEX_COMMIT_STATE
+  }
+  if (env.commitText !== undefined) {
+    process.env.RUNEWORK_FAKE_CODEX_COMMIT_TEXT = env.commitText
+  } else {
+    delete process.env.RUNEWORK_FAKE_CODEX_COMMIT_TEXT
+  }
+  if (env.delayMs !== undefined) {
+    process.env.RUNEWORK_FAKE_CODEX_DELAY_MS = env.delayMs
+  } else {
+    delete process.env.RUNEWORK_FAKE_CODEX_DELAY_MS
+  }
+  if (env.streamText !== undefined) {
+    process.env.RUNEWORK_FAKE_CODEX_STREAM_TEXT = env.streamText
+  } else {
+    delete process.env.RUNEWORK_FAKE_CODEX_STREAM_TEXT
+  }
 
   t.after(() => {
     process.env.PATH = previous.PATH
@@ -259,12 +357,26 @@ function withFakeCodexEnv(
     else process.env.RUNEWORK_FAKE_CODEX_FIX_RELATIVE_PATH = previous.RUNEWORK_FAKE_CODEX_FIX_RELATIVE_PATH
     if (previous.RUNEWORK_FAKE_CODEX_FIX_CONTENT === undefined) delete process.env.RUNEWORK_FAKE_CODEX_FIX_CONTENT
     else process.env.RUNEWORK_FAKE_CODEX_FIX_CONTENT = previous.RUNEWORK_FAKE_CODEX_FIX_CONTENT
+    if (previous.RUNEWORK_FAKE_CODEX_ALIGN_RELATIVE_PATH === undefined) delete process.env.RUNEWORK_FAKE_CODEX_ALIGN_RELATIVE_PATH
+    else process.env.RUNEWORK_FAKE_CODEX_ALIGN_RELATIVE_PATH = previous.RUNEWORK_FAKE_CODEX_ALIGN_RELATIVE_PATH
+    if (previous.RUNEWORK_FAKE_CODEX_ALIGN_CONTENT === undefined) delete process.env.RUNEWORK_FAKE_CODEX_ALIGN_CONTENT
+    else process.env.RUNEWORK_FAKE_CODEX_ALIGN_CONTENT = previous.RUNEWORK_FAKE_CODEX_ALIGN_CONTENT
+    if (previous.RUNEWORK_FAKE_CODEX_COMMIT_SCENARIO === undefined) delete process.env.RUNEWORK_FAKE_CODEX_COMMIT_SCENARIO
+    else process.env.RUNEWORK_FAKE_CODEX_COMMIT_SCENARIO = previous.RUNEWORK_FAKE_CODEX_COMMIT_SCENARIO
+    if (previous.RUNEWORK_FAKE_CODEX_COMMIT_STATE === undefined) delete process.env.RUNEWORK_FAKE_CODEX_COMMIT_STATE
+    else process.env.RUNEWORK_FAKE_CODEX_COMMIT_STATE = previous.RUNEWORK_FAKE_CODEX_COMMIT_STATE
+    if (previous.RUNEWORK_FAKE_CODEX_COMMIT_TEXT === undefined) delete process.env.RUNEWORK_FAKE_CODEX_COMMIT_TEXT
+    else process.env.RUNEWORK_FAKE_CODEX_COMMIT_TEXT = previous.RUNEWORK_FAKE_CODEX_COMMIT_TEXT
+    if (previous.RUNEWORK_FAKE_CODEX_DELAY_MS === undefined) delete process.env.RUNEWORK_FAKE_CODEX_DELAY_MS
+    else process.env.RUNEWORK_FAKE_CODEX_DELAY_MS = previous.RUNEWORK_FAKE_CODEX_DELAY_MS
+    if (previous.RUNEWORK_FAKE_CODEX_STREAM_TEXT === undefined) delete process.env.RUNEWORK_FAKE_CODEX_STREAM_TEXT
+    else process.env.RUNEWORK_FAKE_CODEX_STREAM_TEXT = previous.RUNEWORK_FAKE_CODEX_STREAM_TEXT
   })
 }
 
 function withFakeClaudeEnv(
   t: { after: (cleanup: () => void) => void },
-  env: { binDir: string; logPath: string; reviewText: string; exitCode?: string },
+  env: { binDir: string; logPath: string; reviewText: string; exitCode?: string; delayMs?: string },
 ): void {
   const previous = {
     PATH: process.env.PATH,
@@ -273,6 +385,7 @@ function withFakeClaudeEnv(
     RUNEWORK_FAKE_CLAUDE_LOG: process.env.RUNEWORK_FAKE_CLAUDE_LOG,
     RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT: process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT,
     RUNEWORK_FAKE_CLAUDE_EXIT_CODE: process.env.RUNEWORK_FAKE_CLAUDE_EXIT_CODE,
+    RUNEWORK_FAKE_CLAUDE_DELAY_MS: process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS,
   }
 
   process.env.PATH = env.binDir
@@ -284,6 +397,11 @@ function withFakeClaudeEnv(
     process.env.RUNEWORK_FAKE_CLAUDE_EXIT_CODE = env.exitCode
   } else {
     delete process.env.RUNEWORK_FAKE_CLAUDE_EXIT_CODE
+  }
+  if (env.delayMs !== undefined) {
+    process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS = env.delayMs
+  } else {
+    delete process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS
   }
 
   t.after(() => {
@@ -298,6 +416,8 @@ function withFakeClaudeEnv(
     else process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT = previous.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT
     if (previous.RUNEWORK_FAKE_CLAUDE_EXIT_CODE === undefined) delete process.env.RUNEWORK_FAKE_CLAUDE_EXIT_CODE
     else process.env.RUNEWORK_FAKE_CLAUDE_EXIT_CODE = previous.RUNEWORK_FAKE_CLAUDE_EXIT_CODE
+    if (previous.RUNEWORK_FAKE_CLAUDE_DELAY_MS === undefined) delete process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS
+    else process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS = previous.RUNEWORK_FAKE_CLAUDE_DELAY_MS
   })
 }
 
@@ -423,15 +543,60 @@ test('runPipeline executes a user-authored pipeline inside a scaffolded repo', a
 test('runPipeline rejects invalid review scopes instead of reporting a clean diff', async (t) => {
   const { runPipeline } = await import('./pipelines/index.ts')
   const { runeworkDir } = await createDogfoodRepo(t)
+  const progressEvents: Array<Record<string, unknown>> = []
 
   await assert.rejects(
     () =>
       runPipeline('code-review', runeworkDir, {
         options: { scope: '__runework_missing_review_scope__' },
         log: () => {},
+        onProgress: (event) => {
+          progressEvents.push(event)
+        },
       }),
     /Invalid review scope "__runework_missing_review_scope__"/,
   )
+
+  assert.ok(progressEvents.some((event) =>
+    event.type === 'dogfood:job'
+    && event.jobId === 'cycle:1:review:collect-diff'
+    && event.status === 'failed',
+  ))
+})
+
+test('code-review emits a failed prepare job when no supported CLI tools are installed', async (t) => {
+  const { runPipeline } = await import('./pipelines/index.ts')
+  const { runeworkDir } = await createDogfoodRepo(t)
+  const emptyBinRoot = await mkdtemp(join(tmpdir(), 'runework-empty-bin-'))
+  const emptyBinDir = join(emptyBinRoot, 'bin')
+  await mkdir(emptyBinDir, { recursive: true })
+  t.after(async () => {
+    await rm(emptyBinRoot, { recursive: true, force: true })
+  })
+
+  const previousPath = process.env.PATH
+  process.env.PATH = emptyBinDir
+  t.after(() => {
+    process.env.PATH = previousPath
+  })
+
+  const progressEvents: Array<Record<string, unknown>> = []
+  await assert.rejects(
+    () =>
+      runPipeline('code-review', runeworkDir, {
+        log: () => {},
+        onProgress: (event) => {
+          progressEvents.push(event)
+        },
+      }),
+    /No supported AI CLI tools found/,
+  )
+
+  assert.ok(progressEvents.some((event) =>
+    event.type === 'dogfood:job'
+    && event.jobId === 'prepare:detect-tools'
+    && event.status === 'failed',
+  ))
 })
 
 test('code-review rejects non-string scope options with an explicit validation error', async (t) => {
@@ -508,6 +673,240 @@ test('code-review treats 0 and empty string fix options as disabled', async (t) 
     assert.equal(execInvocations.length, 1)
     assert.ok(execInvocations.every((entry) => !entry.args.includes('workspace-write')))
   }
+})
+
+test('code-review emits progress events and starts reviewer jobs before any reviewer completes', async (t) => {
+  const { runPipeline } = await import('./pipelines/index.ts')
+  const { repoRoot, runeworkDir } = await createDogfoodRepo(t)
+  const fakeCodex = await createFakeCodexCli(t)
+  const fakeClaude = await createFakeClaudeCli(t)
+
+  const previous = {
+    PATH: process.env.PATH,
+    GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL,
+    GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM,
+    RUNEWORK_FAKE_CODEX_LOG: process.env.RUNEWORK_FAKE_CODEX_LOG,
+    RUNEWORK_FAKE_CODEX_REVIEW_TEXT: process.env.RUNEWORK_FAKE_CODEX_REVIEW_TEXT,
+    RUNEWORK_FAKE_CODEX_DELAY_MS: process.env.RUNEWORK_FAKE_CODEX_DELAY_MS,
+    RUNEWORK_FAKE_CLAUDE_LOG: process.env.RUNEWORK_FAKE_CLAUDE_LOG,
+    RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT: process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT,
+    RUNEWORK_FAKE_CLAUDE_DELAY_MS: process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS,
+  }
+
+  process.env.PATH = `${fakeCodex.binDir}:${fakeClaude.binDir}`
+  process.env.GIT_CONFIG_GLOBAL = '/dev/null'
+  process.env.GIT_CONFIG_NOSYSTEM = '1'
+  process.env.RUNEWORK_FAKE_CODEX_LOG = fakeCodex.logPath
+  process.env.RUNEWORK_FAKE_CODEX_REVIEW_TEXT = [
+    '## Must Fix',
+    '- None',
+    '',
+    '## Should Fix',
+    '- None',
+    '',
+    '## Consider',
+    '- None',
+    '',
+    '## Summary',
+    '- Codex review finished.',
+    '',
+  ].join('\n')
+  process.env.RUNEWORK_FAKE_CODEX_DELAY_MS = '50'
+  process.env.RUNEWORK_FAKE_CLAUDE_LOG = fakeClaude.logPath
+  process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT = [
+    '## Must Fix',
+    '- [README.md:2] Tighten this sentence.',
+    '',
+    '## Should Fix',
+    '- None',
+    '',
+    '## Consider',
+    '- None',
+    '',
+    '## Summary',
+    '- Claude review finished.',
+    '',
+  ].join('\n')
+  process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS = '50'
+
+  t.after(() => {
+    process.env.PATH = previous.PATH
+    if (previous.GIT_CONFIG_GLOBAL === undefined) delete process.env.GIT_CONFIG_GLOBAL
+    else process.env.GIT_CONFIG_GLOBAL = previous.GIT_CONFIG_GLOBAL
+    if (previous.GIT_CONFIG_NOSYSTEM === undefined) delete process.env.GIT_CONFIG_NOSYSTEM
+    else process.env.GIT_CONFIG_NOSYSTEM = previous.GIT_CONFIG_NOSYSTEM
+    if (previous.RUNEWORK_FAKE_CODEX_LOG === undefined) delete process.env.RUNEWORK_FAKE_CODEX_LOG
+    else process.env.RUNEWORK_FAKE_CODEX_LOG = previous.RUNEWORK_FAKE_CODEX_LOG
+    if (previous.RUNEWORK_FAKE_CODEX_REVIEW_TEXT === undefined) delete process.env.RUNEWORK_FAKE_CODEX_REVIEW_TEXT
+    else process.env.RUNEWORK_FAKE_CODEX_REVIEW_TEXT = previous.RUNEWORK_FAKE_CODEX_REVIEW_TEXT
+    if (previous.RUNEWORK_FAKE_CODEX_DELAY_MS === undefined) delete process.env.RUNEWORK_FAKE_CODEX_DELAY_MS
+    else process.env.RUNEWORK_FAKE_CODEX_DELAY_MS = previous.RUNEWORK_FAKE_CODEX_DELAY_MS
+    if (previous.RUNEWORK_FAKE_CLAUDE_LOG === undefined) delete process.env.RUNEWORK_FAKE_CLAUDE_LOG
+    else process.env.RUNEWORK_FAKE_CLAUDE_LOG = previous.RUNEWORK_FAKE_CLAUDE_LOG
+    if (previous.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT === undefined) delete process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT
+    else process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT = previous.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT
+    if (previous.RUNEWORK_FAKE_CLAUDE_DELAY_MS === undefined) delete process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS
+    else process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS = previous.RUNEWORK_FAKE_CLAUDE_DELAY_MS
+  })
+
+  await writeFile(join(repoRoot, 'README.md'), '# temp repo\nneeds review\n', 'utf8')
+
+  const progressEvents: Array<Record<string, unknown>> = []
+  const result = await runPipeline('code-review', runeworkDir, {
+    options: { cycles: 1, fix: false },
+    log: () => {},
+    onProgress: (event) => {
+      progressEvents.push(event)
+    },
+  })
+
+  assert.equal(result.ok, true)
+
+  const dogfoodEvents = progressEvents.filter(
+    (event) => typeof event.type === 'string' && event.type.startsWith('dogfood:'),
+  )
+
+  const firstReviewerTerminalJobIndex = dogfoodEvents.findIndex((event) =>
+    event.type === 'dogfood:job'
+    && typeof event.jobId === 'string'
+    && (event.jobId === 'cycle:1:review:claude' || event.jobId === 'cycle:1:review:codex')
+    && typeof event.status === 'string'
+    && ['success', 'failed'].includes(event.status),
+  )
+  const claudeRunningIndex = dogfoodEvents.findIndex((event) =>
+    event.type === 'dogfood:job'
+    && event.jobId === 'cycle:1:review:claude'
+    && event.status === 'running',
+  )
+  const codexRunningIndex = dogfoodEvents.findIndex((event) =>
+    event.type === 'dogfood:job'
+    && event.jobId === 'cycle:1:review:codex'
+    && event.status === 'running',
+  )
+
+  assert.ok(claudeRunningIndex >= 0)
+  assert.ok(codexRunningIndex >= 0)
+  assert.ok(firstReviewerTerminalJobIndex > Math.max(claudeRunningIndex, codexRunningIndex))
+  assert.ok(dogfoodEvents.some((event) =>
+    event.type === 'dogfood:run'
+    && event.pipelineName === 'code-review'
+    && typeof event.runId === 'string',
+  ))
+  assert.ok(dogfoodEvents.some((event) =>
+    event.type === 'dogfood:output'
+    && event.jobId === 'cycle:1:review:claude'
+    && event.stream === 'stdout',
+  ))
+})
+
+test('code-review emits a failed synthesis job when synthesis stream handling throws', async (t) => {
+  const { runPipeline } = await import('./pipelines/index.ts')
+  const { repoRoot, runeworkDir } = await createDogfoodRepo(t)
+  const fakeCodex = await createFakeCodexCli(t)
+  const fakeClaude = await createFakeClaudeCli(t)
+
+  const previous = {
+    PATH: process.env.PATH,
+    GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL,
+    GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM,
+    RUNEWORK_FAKE_CODEX_LOG: process.env.RUNEWORK_FAKE_CODEX_LOG,
+    RUNEWORK_FAKE_CODEX_REVIEW_TEXT: process.env.RUNEWORK_FAKE_CODEX_REVIEW_TEXT,
+    RUNEWORK_FAKE_CODEX_DELAY_MS: process.env.RUNEWORK_FAKE_CODEX_DELAY_MS,
+    RUNEWORK_FAKE_CODEX_STREAM_TEXT: process.env.RUNEWORK_FAKE_CODEX_STREAM_TEXT,
+    RUNEWORK_FAKE_CLAUDE_LOG: process.env.RUNEWORK_FAKE_CLAUDE_LOG,
+    RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT: process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT,
+    RUNEWORK_FAKE_CLAUDE_DELAY_MS: process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS,
+  }
+
+  process.env.PATH = `${fakeCodex.binDir}:${fakeClaude.binDir}`
+  process.env.GIT_CONFIG_GLOBAL = '/dev/null'
+  process.env.GIT_CONFIG_NOSYSTEM = '1'
+  process.env.RUNEWORK_FAKE_CODEX_LOG = fakeCodex.logPath
+  process.env.RUNEWORK_FAKE_CODEX_REVIEW_TEXT = [
+    '## Must Fix',
+    '- None',
+    '',
+    '## Should Fix',
+    '- None',
+    '',
+    '## Consider',
+    '- None',
+    '',
+    '## Summary',
+    '- Codex review finished.',
+    '',
+  ].join('\n')
+  process.env.RUNEWORK_FAKE_CODEX_STREAM_TEXT = 'synthesis stream'
+  process.env.RUNEWORK_FAKE_CLAUDE_LOG = fakeClaude.logPath
+  process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT = [
+    '## Must Fix',
+    '- None',
+    '',
+    '## Should Fix',
+    '- None',
+    '',
+    '## Consider',
+    '- None',
+    '',
+    '## Summary',
+    '- Claude review finished.',
+    '',
+  ].join('\n')
+
+  t.after(() => {
+    process.env.PATH = previous.PATH
+    if (previous.GIT_CONFIG_GLOBAL === undefined) delete process.env.GIT_CONFIG_GLOBAL
+    else process.env.GIT_CONFIG_GLOBAL = previous.GIT_CONFIG_GLOBAL
+    if (previous.GIT_CONFIG_NOSYSTEM === undefined) delete process.env.GIT_CONFIG_NOSYSTEM
+    else process.env.GIT_CONFIG_NOSYSTEM = previous.GIT_CONFIG_NOSYSTEM
+    if (previous.RUNEWORK_FAKE_CODEX_LOG === undefined) delete process.env.RUNEWORK_FAKE_CODEX_LOG
+    else process.env.RUNEWORK_FAKE_CODEX_LOG = previous.RUNEWORK_FAKE_CODEX_LOG
+    if (previous.RUNEWORK_FAKE_CODEX_REVIEW_TEXT === undefined) delete process.env.RUNEWORK_FAKE_CODEX_REVIEW_TEXT
+    else process.env.RUNEWORK_FAKE_CODEX_REVIEW_TEXT = previous.RUNEWORK_FAKE_CODEX_REVIEW_TEXT
+    if (previous.RUNEWORK_FAKE_CODEX_DELAY_MS === undefined) delete process.env.RUNEWORK_FAKE_CODEX_DELAY_MS
+    else process.env.RUNEWORK_FAKE_CODEX_DELAY_MS = previous.RUNEWORK_FAKE_CODEX_DELAY_MS
+    if (previous.RUNEWORK_FAKE_CODEX_STREAM_TEXT === undefined) delete process.env.RUNEWORK_FAKE_CODEX_STREAM_TEXT
+    else process.env.RUNEWORK_FAKE_CODEX_STREAM_TEXT = previous.RUNEWORK_FAKE_CODEX_STREAM_TEXT
+    if (previous.RUNEWORK_FAKE_CLAUDE_LOG === undefined) delete process.env.RUNEWORK_FAKE_CLAUDE_LOG
+    else process.env.RUNEWORK_FAKE_CLAUDE_LOG = previous.RUNEWORK_FAKE_CLAUDE_LOG
+    if (previous.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT === undefined) delete process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT
+    else process.env.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT = previous.RUNEWORK_FAKE_CLAUDE_REVIEW_TEXT
+    if (previous.RUNEWORK_FAKE_CLAUDE_DELAY_MS === undefined) delete process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS
+    else process.env.RUNEWORK_FAKE_CLAUDE_DELAY_MS = previous.RUNEWORK_FAKE_CLAUDE_DELAY_MS
+  })
+
+  await writeFile(join(repoRoot, 'README.md'), '# temp repo\nneeds synthesis failure coverage\n', 'utf8')
+
+  const progressEvents: Array<Record<string, unknown>> = []
+  let threwDuringSynthesisOutput = false
+
+  await assert.rejects(
+    () =>
+      runPipeline('code-review', runeworkDir, {
+        options: { cycles: 1, fix: false },
+        log: () => {},
+        onProgress: (event) => {
+          progressEvents.push(event)
+          if (
+            !threwDuringSynthesisOutput
+            && event.type === 'dogfood:output'
+            && event.jobId === 'cycle:1:review:synthesize'
+          ) {
+            threwDuringSynthesisOutput = true
+            throw new Error('synthetic synthesis progress failure')
+          }
+        },
+      }),
+    /synthetic synthesis progress failure/,
+  )
+
+  assert.equal(threwDuringSynthesisOutput, true)
+  assert.ok(progressEvents.some((event) =>
+    event.type === 'dogfood:job'
+    && event.jobId === 'cycle:1:review:synthesize'
+    && event.status === 'failed'
+    && event.detail === 'synthetic synthesis progress failure',
+  ))
 })
 
 test('code-review rejects resume when invocation flags change', async (t) => {
@@ -966,6 +1365,82 @@ test('code-review preserves the last substantive review when cycle 2 is clean af
     .filter((entry) => entry.args.includes('exec'))
   assert.equal(execInvocations.length, 2)
   assert.equal(execInvocations.filter((entry) => entry.args.includes('workspace-write')).length, 1)
+})
+
+test('constitutional-alignment rolls back an invalid commit when retries fail', async (t) => {
+  const { runPipeline } = await import('./pipelines/index.ts')
+  const { repoRoot, runeworkDir } = await createDogfoodRepo(t)
+  const fakeCodex = await createFakeCodexCli(t)
+
+  const constitutionalPipeline = await readFile(
+    join(process.cwd(), '.runework', 'pipelines', 'constitutional-alignment.ts'),
+    'utf8',
+  )
+  await writeFile(
+    join(runeworkDir, 'pipelines', 'constitutional-alignment.ts'),
+    constitutionalPipeline,
+    'utf8',
+  )
+  await writeFile(
+    join(repoRoot, 'CONSTITUTION.md'),
+    '# Constitution\n\n- Preserve durable validation.\n',
+    'utf8',
+  )
+
+  assertSucceeded(
+    runCommand(
+      'git',
+      [
+        'add',
+        'CONSTITUTION.md',
+        '.runework/pipelines/constitutional-alignment.ts',
+      ],
+      repoRoot,
+    ),
+    'git add constitutional pipeline failed in dogfood repo',
+  )
+  assertSucceeded(
+    runCommand(
+      'git',
+      ['-c', 'commit.gpgsign=false', 'commit', '-m', 'seed constitutional pipeline'],
+      repoRoot,
+    ),
+    'git commit constitutional pipeline failed in dogfood repo',
+  )
+
+  const initialHead = runCommand('git', ['rev-parse', 'HEAD'], repoRoot).stdout.trim()
+  const commitStatePath = join(repoRoot, 'codex-commit-state.txt')
+
+  withFakeCodexEnv(t, {
+    binDir: fakeCodex.binDir,
+    logPath: fakeCodex.logPath,
+    reviewText: 'unused',
+    fixText: 'aligned repo',
+    alignRelativePath: 'README.md',
+    alignContent: '# temp repo\nconstitution aligned\n',
+    commitScenario: 'invalid-then-fail',
+    commitStatePath,
+    commitText: 'commit attempt ran',
+  })
+
+  await assert.rejects(
+    () => runPipeline('constitutional-alignment', runeworkDir, { log: () => {} }),
+    /Commit failed after 2 attempts/,
+  )
+
+  assert.equal(runCommand('git', ['rev-parse', 'HEAD'], repoRoot).stdout.trim(), initialHead)
+  assert.equal(
+    await readFile(join(repoRoot, 'README.md'), 'utf8'),
+    '# temp repo\nconstitution aligned\n',
+  )
+  assert.equal(
+    runCommand('git', ['log', '-1', '--pretty=%s'], repoRoot).stdout.trim(),
+    'seed constitutional pipeline',
+  )
+  assert.equal(
+    runCommand('git', ['diff', '--cached', '--name-only'], repoRoot).stdout.trim(),
+    'README.md',
+  )
 })
 
 test('code-review skips writable fixes when codex is unavailable but another reviewer is installed', async (t) => {

@@ -1,4 +1,13 @@
+import { StringDecoder } from 'node:string_decoder'
+
 import { $ } from 'zx'
+
+export type CliOutputStreamName = 'stdout' | 'stderr'
+
+export type CliOutputChunk = {
+  stream: CliOutputStreamName
+  text: string
+}
 
 export type CliRunOptions = {
   bin: string
@@ -7,6 +16,7 @@ export type CliRunOptions = {
   env?: Record<string, string | undefined>
   stdin?: string
   quiet?: boolean
+  onOutputChunk?: (chunk: CliOutputChunk) => void
   timeoutMs?: number
 }
 
@@ -41,6 +51,10 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
   const args = opts.args ?? []
   const cwd = opts.cwd ?? process.cwd()
   const start = Date.now()
+  const combinedChunks: string[] = []
+  const stdoutDecoder = new StringDecoder('utf8')
+  const stderrDecoder = new StringDecoder('utf8')
+  let streamError: unknown
 
   const proc = $({
     cwd,
@@ -52,14 +66,77 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
   })
 
   // zx template: bin is a single string, args array gets properly escaped
-  const output = await proc`${opts.bin} ${args}`
+  const processPromise = proc`${opts.bin} ${args}`
+  let abortTimer: NodeJS.Timeout | undefined
+  processPromise.child?.once('exit', () => {
+    if (abortTimer) {
+      clearTimeout(abortTimer)
+      abortTimer = undefined
+    }
+  })
+
+  const abortForStreamError = (): void => {
+    try {
+      processPromise.child?.kill('SIGTERM')
+    } catch {
+      // Preserve the original stream callback error even if process termination fails.
+    }
+
+    if (!abortTimer) {
+      abortTimer = setTimeout(() => {
+        try {
+          processPromise.child?.kill('SIGKILL')
+        } catch {
+          // Ignore escalation failures and preserve the original callback error.
+        }
+      }, 100)
+      abortTimer.unref?.()
+    }
+  }
+
+  const emitChunk = (stream: CliOutputStreamName, text: string): void => {
+    if (!text) return
+    combinedChunks.push(text)
+    if (!opts.onOutputChunk || streamError) return
+
+    try {
+      opts.onOutputChunk({ stream, text })
+    } catch (error) {
+      streamError = error
+      abortForStreamError()
+    }
+  }
+
+  processPromise.stdout.on('data', (chunk) => {
+    emitChunk('stdout', stdoutDecoder.write(chunk))
+  })
+  processPromise.stderr.on('data', (chunk) => {
+    emitChunk('stderr', stderrDecoder.write(chunk))
+  })
+
+  let output
+  try {
+    output = await processPromise
+  } catch (error) {
+    emitChunk('stdout', stdoutDecoder.end())
+    emitChunk('stderr', stderrDecoder.end())
+    if (streamError) throw streamError
+    throw error
+  }
+
+  emitChunk('stdout', stdoutDecoder.end())
+  emitChunk('stderr', stderrDecoder.end())
+
+  if (streamError) throw streamError
 
   return {
     ok: output.exitCode === 0,
     exitCode: output.exitCode ?? null,
     stdout: output.stdout ?? '',
     stderr: output.stderr ?? '',
-    combined: `${output.stdout ?? ''}${output.stderr ?? ''}`,
+    combined: combinedChunks.length > 0
+      ? combinedChunks.join('')
+      : `${output.stdout ?? ''}${output.stderr ?? ''}`,
     bin: opts.bin,
     args,
     cwd,
