@@ -78,6 +78,44 @@ test('npm publish dry-run succeeds without publish-time manifest corrections', a
     )
   }
 
+  const expectedPackedFiles = [
+    'dist/index.js',
+    'dist/pipelines/index.js',
+    'src/index.ts',
+    'src/pipelines/index.ts',
+    'templates/runework/package.json.tmpl',
+  ]
+  for (const expectedPackedFile of expectedPackedFiles) {
+    assert.ok(
+      packedFiles.includes(expectedPackedFile),
+      `packed runtime is missing expected public artifact: ${expectedPackedFile}`,
+    )
+  }
+
+  const forbiddenPackedFiles = [
+    'dist/models.d.ts',
+    'dist/models.js',
+    'src/models.ts',
+    'src/cli/run.ts',
+    'src/cli/init.ts',
+    'src/cli/pipeline.ts',
+    'src/cli/detect.ts',
+    'src/cli/helpers.ts',
+    'node_modules/@runework/cli/src/run.ts',
+    'node_modules/@runework/cli/src/init.ts',
+    'node_modules/@runework/cli/src/pipeline.ts',
+    'node_modules/@runework/cli/src/detect.ts',
+    'node_modules/@runework/cli/src/helpers.ts',
+    'node_modules/@runework/cli/src/index.ts',
+  ]
+  for (const forbiddenPackedFile of forbiddenPackedFiles) {
+    assert.equal(
+      packedFiles.includes(forbiddenPackedFile),
+      false,
+      `packed runtime leaked unexported implementation detail: ${forbiddenPackedFile}`,
+    )
+  }
+
   const result = runCommand(
     npmCommand,
     ['publish', '--dry-run', '--tag', 'next'],

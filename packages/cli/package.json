@@ -11,13 +11,7 @@
     }
   },
   "files": [
-    "dist",
-    "src/detect.ts",
-    "src/helpers.ts",
-    "src/index.ts",
-    "src/init.ts",
-    "src/pipeline.ts",
-    "src/run.ts"
+    "dist"
   ],
   "dependencies": {
     "@runework/core": "0.1.1",
