@@ -1,7 +1,11 @@
+import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { StringDecoder } from 'node:string_decoder'
+import { promisify } from 'node:util'
 
 import { $, quote } from 'zx'
+
+const execFileAsync = promisify(execFile)
 
 export type CliOutputStreamName = 'stdout' | 'stderr'
 
@@ -92,6 +96,70 @@ function createAbortError(message = 'CLI run aborted'): Error {
   return error
 }
 
+async function listDescendantProcessIds(rootPid: number): Promise<number[]> {
+  if (process.platform === 'win32') return []
+
+  let stdout = ''
+  try {
+    ({ stdout } = await execFileAsync('ps', ['-Ao', 'pid=,ppid='], {
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024,
+    }))
+  } catch {
+    return []
+  }
+
+  const childrenByParent = new Map<number, number[]>()
+  for (const line of stdout.split('\n')) {
+    const [pidText, parentPidText] = line.trim().split(/\s+/, 2)
+    const pid = Number(pidText)
+    const parentPid = Number(parentPidText)
+    if (!Number.isInteger(pid) || !Number.isInteger(parentPid)) continue
+
+    const siblings = childrenByParent.get(parentPid) ?? []
+    siblings.push(pid)
+    childrenByParent.set(parentPid, siblings)
+  }
+
+  const descendants: number[] = []
+  const stack = [...(childrenByParent.get(rootPid) ?? [])]
+  const seen = new Set<number>()
+
+  while (stack.length > 0) {
+    const pid = stack.pop()
+    if (!pid || seen.has(pid)) continue
+
+    seen.add(pid)
+    descendants.push(pid)
+    stack.push(...(childrenByParent.get(pid) ?? []))
+  }
+
+  return descendants
+}
+
+function signalProcess(pid: number | undefined, signal: NodeJS.Signals): void {
+  if (!pid) return
+
+  try {
+    process.kill(pid, signal)
+  } catch {
+    // Ignore ESRCH/EPERM and let the main process result decide the outcome.
+  }
+}
+
+async function signalProcessTree(
+  rootPid: number | undefined,
+  signal: NodeJS.Signals,
+): Promise<void> {
+  if (!rootPid) return
+
+  const descendants = await listDescendantProcessIds(rootPid)
+  for (const pid of descendants.reverse()) {
+    signalProcess(pid, signal)
+  }
+  signalProcess(rootPid, signal)
+}
+
 /**
  * Single place for all CLI execution. Sets quiet, nothrow, cwd, env,
  * stdin, and timeout policy. Every adapter goes through here.
@@ -145,19 +213,11 @@ export async function runCli(opts: CliRunOptions): Promise<CliRunResult> {
       abortError = error
     }
 
-    try {
-      processPromise.child?.kill('SIGTERM')
-    } catch {
-      // Preserve the original stream callback error even if process termination fails.
-    }
+    void signalProcessTree(processPromise.child?.pid, 'SIGTERM')
 
     if (!abortTimer) {
       abortTimer = setTimeout(() => {
-        try {
-          processPromise.child?.kill('SIGKILL')
-        } catch {
-          // Ignore escalation failures and preserve the original callback error.
-        }
+        void signalProcessTree(processPromise.child?.pid, 'SIGKILL')
       }, 100)
       abortTimer.unref?.()
     }

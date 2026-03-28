@@ -65,7 +65,7 @@ const h = createElement
 const MIN_STREAM_HEIGHT = 10
 const RESERVED_SCREEN_LINES = 8
 const ENABLE_MOUSE_SCROLL = '\u001B[?1000h\u001B[?1006h'
-const DISABLE_MOUSE_SCROLL = '\u001B[?1000l\u001B[?1006l'
+const DISABLE_MOUSE_SCROLL = '\u001B[?1000l\u001B[?1002l\u001B[?1003l\u001B[?1005l\u001B[?1006l\u001B[?1015l\u001B[?25h'
 const STREAM_TEXT_COLOR = '#f5f7ff'
 const STREAM_ERROR_COLOR = '#ffb0b0'
 
@@ -296,6 +296,10 @@ export function getExitRequestCode(
   input: string,
   key: ExitKeyState,
 ): number | undefined {
+  if (input === '\u0003') {
+    return 0
+  }
+
   if (input === 'q' && !key.ctrl && !key.meta) {
     return 0
   }
@@ -554,19 +558,25 @@ function formatPlainOutputEvent(
 
 function PipelineApp(props: RunDogfoodPipelineOptions) {
   const { exit } = useApp()
-  const { stdin, internal_eventEmitter } = useStdin()
+  const { stdin } = useStdin()
   const { stdout, write } = useStdout()
   const [state, dispatch] = useReducer(uiReducer, createInitialState(props.pipelineName))
   const [streamScrollOffset, setStreamScrollOffset] = useState(0)
   const abortControllerRef = useRef(new AbortController())
   const previousPrimaryJobIdRef = useRef<string | undefined>(undefined)
   const requestedExitCodeRef = useRef<number | undefined>(undefined)
+  const requestExitRef = useRef<(code?: number) => void>(() => {})
   const runSettledRef = useRef(false)
 
   const requestExit = (code = 0) => {
     if (requestedExitCodeRef.current !== undefined) return
 
     requestedExitCodeRef.current = code
+
+    if (stdout.isTTY) {
+      write(DISABLE_MOUSE_SCROLL)
+    }
+
     if (!abortControllerRef.current.signal.aborted) {
       abortControllerRef.current.abort()
     }
@@ -575,6 +585,8 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
       exit(code)
     }
   }
+
+  requestExitRef.current = requestExit
 
   useEffect(() => {
     let active = true
@@ -673,7 +685,14 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
   }, [stdin.isTTY, stdout.isTTY, write])
 
   useEffect(() => {
-    const handleInput = (data: string) => {
+    const handleInput = (chunk: Buffer | string) => {
+      const data = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+      const exitCode = getExitRequestCode(data, {})
+      if (exitCode !== undefined) {
+        requestExitRef.current(exitCode)
+        return
+      }
+
       const delta = extractMouseWheelDelta(data)
       if (delta === 0) return
 
@@ -685,11 +704,22 @@ function PipelineApp(props: RunDogfoodPipelineOptions) {
         ))
     }
 
-    internal_eventEmitter?.on('input', handleInput)
+    stdin.on('data', handleInput)
     return () => {
-      internal_eventEmitter?.removeListener('input', handleInput)
+      stdin.off('data', handleInput)
     }
-  }, [internal_eventEmitter, streamHeight, wrappedOutputLines.length])
+  }, [stdin, streamHeight, wrappedOutputLines.length])
+
+  useEffect(() => {
+    const handleSigint = () => {
+      requestExitRef.current(0)
+    }
+
+    process.on('SIGINT', handleSigint)
+    return () => {
+      process.off('SIGINT', handleSigint)
+    }
+  }, [])
 
   useInput((_input, key) => {
     const exitCode = getExitRequestCode(_input, key)
@@ -800,6 +830,10 @@ export async function runDogfoodPipelineWithInk(
     return typeof result === 'number' ? result : 0
   } finally {
     instance.cleanup()
+
+    if (process.stdout.isTTY) {
+      process.stdout.write(DISABLE_MOUSE_SCROLL)
+    }
   }
 }
 

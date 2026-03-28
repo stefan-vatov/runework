@@ -258,11 +258,12 @@ test('mouse wheel parser converts sgr mouse scroll sequences into viewport delta
   )
 })
 
-test('ink exit input mapper treats q and Ctrl+C as clean exits', async () => {
+test('ink exit input mapper treats q and both Ctrl+C encodings as clean exits', async () => {
   const { getExitRequestCode } = await import('../.runework/scripts/pipeline-ui.ts')
 
   assert.equal(getExitRequestCode('q', {}), 0)
   assert.equal(getExitRequestCode('c', { ctrl: true }), 0)
+  assert.equal(getExitRequestCode('\u0003', {}), 0)
   assert.equal(getExitRequestCode('q', { meta: true }), undefined)
   assert.equal(getExitRequestCode('x', {}), undefined)
 })
@@ -277,5 +278,28 @@ test('repo-local pipeline script uses source exports during development', async 
   assert.equal(
     packageJson.scripts?.pipeline,
     'node --conditions=source .runework/scripts/pipeline.ts',
+  )
+})
+
+test('constitutional alignment dogfood pipeline uses pipeline-managed adapters', async () => {
+  const source = await readFile(
+    new URL('../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.doesNotMatch(source, /import\s*{\s*codex\b/)
+  assert.match(source, /ctx\.adapters\.codex/)
+  assert.match(source, /ctx\.codexAdapter\.run\(/)
+})
+
+test('constitutional alignment dogfood pipeline preserves AbortError from codex runs', async () => {
+  const source = await readFile(
+    new URL('../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /function isAbortError\(error: unknown\)/)
+  assert.ok(
+    (source.match(/if \(isAbortError\(error\)\) throw error/g) ?? []).length >= 2,
   )
 })

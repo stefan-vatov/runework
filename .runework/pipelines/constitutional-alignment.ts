@@ -1,4 +1,4 @@
-import { codex, detectTools } from 'runework'
+import { detectTools } from 'runework'
 import { defineWorkflowPipeline } from 'runework/pipelines'
 import type { PipelineContext, PipelineResult } from 'runework/pipelines'
 import { $ } from 'runework/zx'
@@ -44,6 +44,7 @@ type AlignmentPhaseContext = {
   readonly config: Readonly<AlignmentConfig>
   readonly state: Readonly<AlignmentRuntimeState>
   readonly cycle: number
+  readonly codexAdapter: PipelineContext['adapters'][string]
   log(message: string): void
   progress: PipelineContext['progress']
   writeOutput(filename: string, content: string): Promise<string>
@@ -140,6 +141,7 @@ function createAlignmentPhaseContext(
     config,
     state,
     cycle,
+    codexAdapter: ctx.adapters.codex,
     log: ctx.log,
     progress: ctx.progress,
     writeOutput: ctx.writeOutput,
@@ -186,6 +188,10 @@ function applyStatePatch(
   patch: AlignmentStatePatch | void,
 ): AlignmentRuntimeState {
   return patch ? { ...state, ...patch } : state
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
 }
 
 function listChangedKeys(
@@ -408,16 +414,16 @@ async function detectAvailableToolsJob(ctx: AlignmentPhaseContext): Promise<Alig
 async function reviewAndFix(ctx: AlignmentPhaseContext): Promise<AlignmentStatePatch> {
   const job = buildAlignmentJobDescriptor(ctx.cycle)
   emitDogfoodJob(ctx, job, 'running', `cycle ${ctx.cycle}`)
-  const aligner = codex(CODEX_MODEL)
   const prompt = buildAlignmentPrompt(ctx.config.constitutionText)
   const streamReporter = createAgentStreamReporter(ctx, job)
 
   let text: string
   let ok: boolean
   try {
-    const result = await aligner.run({
+    const result = await ctx.codexAdapter.run({
       prompt,
       cwd: ctx.repoRoot,
+      model: CODEX_MODEL,
       sandbox: 'workspace-write',
       extraArgs: CODEX_EXTRA_ARGS,
       timeoutMs: 60 * 60 * 1000,
@@ -426,6 +432,7 @@ async function reviewAndFix(ctx: AlignmentPhaseContext): Promise<AlignmentStateP
     text = result.text
     ok = result.ok
   } catch (error) {
+    if (isAbortError(error)) throw error
     text = `[error] ${error instanceof Error ? error.message : String(error)}`
     ok = false
   } finally {
@@ -472,7 +479,6 @@ async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentState
     }
   }
 
-  const committer = codex(CODEX_MODEL)
   const initialHead = await getHead(ctx.repoRoot)
   let lastFailure: string | undefined
   let lastCreatedCommit = false
@@ -494,9 +500,10 @@ async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentState
     let text: string
     let ok: boolean
     try {
-      const result = await committer.run({
+      const result = await ctx.codexAdapter.run({
         prompt,
         cwd: ctx.repoRoot,
+        model: CODEX_MODEL,
         sandbox: 'workspace-write',
         extraArgs: CODEX_EXTRA_ARGS,
         timeoutMs: 30 * 60 * 1000,
@@ -505,6 +512,7 @@ async function commitChanges(ctx: AlignmentPhaseContext): Promise<AlignmentState
       text = result.text
       ok = result.ok
     } catch (error) {
+      if (isAbortError(error)) throw error
       text = `[error] ${error instanceof Error ? error.message : String(error)}`
       ok = false
     } finally {

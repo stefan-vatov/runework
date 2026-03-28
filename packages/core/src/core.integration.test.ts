@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -32,6 +32,27 @@ async function createFakeCli(
   return {
     binDir,
     pathEnv: `${binDir}:${process.env.PATH ?? ''}`,
+  }
+}
+
+async function waitForFile(path: string, attempts = 40): Promise<string> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await readFile(path, 'utf8')
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+  }
+
+  throw new Error(`Timed out waiting for file: ${path}`)
+}
+
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -137,6 +158,60 @@ test('runCli abort signal terminates the CLI promptly with an AbortError', async
     Date.now() - startedAt < 500,
     `expected runCli to abort promptly, took ${Date.now() - startedAt}ms`,
   )
+})
+
+test('runCli abort signal terminates descendant tool processes too', async (t) => {
+  const fake = await createFakeCli(
+    t,
+    'abort-tree-cli',
+    [
+      '#!/usr/bin/env node',
+      "const { spawn } = require('node:child_process')",
+      "const { writeFileSync } = require('node:fs')",
+      "const childPidFile = process.argv[2]",
+      "const child = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)\"])",
+      "writeFileSync(childPidFile, String(child.pid), 'utf8')",
+      "process.on('SIGTERM', () => {})",
+      'setInterval(() => {}, 1000)',
+      '',
+    ].join('\n'),
+  )
+
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-abort-tree-'))
+  t.after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true })
+  })
+
+  const childPidFile = join(tmpRoot, 'child.pid')
+  const controller = new AbortController()
+  const run = runCli({
+    bin: 'abort-tree-cli',
+    args: [childPidFile],
+    env: { PATH: fake.pathEnv },
+    signal: controller.signal,
+  })
+
+  const childPid = Number((await waitForFile(childPidFile)).trim())
+  t.after(() => {
+    if (Number.isInteger(childPid) && processExists(childPid)) {
+      try {
+        process.kill(childPid, 'SIGKILL')
+      } catch {}
+    }
+  })
+
+  controller.abort()
+
+  await assert.rejects(
+    run,
+    (error: unknown) =>
+      error instanceof Error
+      && error.name === 'AbortError'
+      && /aborted/i.test(error.message),
+  )
+
+  await new Promise((resolve) => setTimeout(resolve, 200))
+  assert.equal(processExists(childPid), false)
 })
 
 test('runCli preserves spawn failures when the process never starts', async () => {
