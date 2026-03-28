@@ -303,3 +303,19 @@ test('constitutional alignment dogfood pipeline preserves AbortError from codex 
     (source.match(/if \(isAbortError\(error\)\) throw error/g) ?? []).length >= 2,
   )
 })
+
+test('constitutional alignment prompt treats committed .runework as the sanctioned dogfood boundary', async () => {
+  const source = await readFile(
+    new URL('../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /committed \.runework\/ files are the sanctioned repo-local dogfood and consumer-owned workflow boundary/,
+  )
+  assert.match(
+    source,
+    /Do NOT create, move, or rename that repo-local boundary to a separate dogfood\/ folder/,
+  )
+})

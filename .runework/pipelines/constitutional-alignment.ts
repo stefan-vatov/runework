@@ -247,6 +247,9 @@ Decision policy:
 - Keep the runtime on primitives, but do not achieve that by weakening verification of existing behavior.
 
 Rules:
+- In this repository, committed .runework/ files are the sanctioned repo-local dogfood and consumer-owned workflow boundary. They are intentionally in-tree for this repo's own development and validation.
+- Do NOT create, move, or rename that repo-local boundary to a separate dogfood/ folder just to make the architecture look cleaner on paper.
+- If a .runework/ file leaks into the published runtime contract, fix the package surface, docs, or validation around publication instead of relocating the repo-local workflow files.
 - Do NOT edit files under .runework/.work/ or any generated pipeline artifacts.
 - Do NOT add features, abstractions, or code beyond what is needed to resolve deviations.
 - Do NOT delete, narrow, bypass, or weaken tests/checks just to make the repo appear constitutionally aligned.
