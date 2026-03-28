@@ -918,7 +918,8 @@ async function applyFixes(ctx: ReviewPhaseContext): Promise<ReviewStatePatch> {
             cwd: ctx.repoRoot,
             model: 'gpt-5.4',
             sandbox: 'workspace-write',
-            extraArgs: ['--full-auto', '--config', 'model_reasoning_effort=xhigh'],
+            approvalMode: 'never',
+            extraArgs: ['--config', 'model_reasoning_effort=xhigh'],
             timeoutMs: 60 * 60 * 1000,
             onOutputChunk: streamReporter.onOutputChunk,
           })

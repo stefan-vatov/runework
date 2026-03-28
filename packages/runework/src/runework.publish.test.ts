@@ -53,6 +53,31 @@ test('npm publish dry-run succeeds without publish-time manifest corrections', a
   const buildOutput = [buildResult.stdout, buildResult.stderr].filter(Boolean).join('\n')
   assert.equal(buildResult.status, 0, buildOutput)
 
+  const packResult = runCommand(
+    npmCommand,
+    ['pack', '--dry-run', '--json'],
+    packageRoot,
+    { env: npmEnv },
+  )
+  const packOutput = [packResult.stdout, packResult.stderr].filter(Boolean).join('\n')
+  assert.equal(packResult.status, 0, packOutput)
+
+  const packedFiles = (
+    JSON.parse(packResult.stdout) as Array<{ files?: Array<{ path?: string }> }>
+  ).flatMap((entry) =>
+    (entry.files ?? [])
+      .map((file) => file.path)
+      .filter((path): path is string => Boolean(path)),
+  )
+
+  for (const packedFile of packedFiles) {
+    assert.doesNotMatch(
+      packedFile,
+      /\.(?:unit|integration|publish)\.test\.[cm]?[jt]s$/i,
+      `packed runtime leaked internal test file: ${packedFile}`,
+    )
+  }
+
   const result = runCommand(
     npmCommand,
     ['publish', '--dry-run', '--tag', 'next'],

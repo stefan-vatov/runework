@@ -291,6 +291,8 @@ test('code-review dogfood pipeline uses pipeline-managed adapters', async () => 
   )
   assert.match(source, /ctx\.adapters\[name\]/)
   assert.match(source, /ctx\.adapters\.codex/)
+  assert.match(source, /approvalMode: 'never'/)
+  assert.doesNotMatch(source, /--full-auto/)
 })
 
 test('code-review dogfood pipeline preserves AbortError from adapter-backed phases', async () => {
@@ -335,11 +337,14 @@ test('constitutional alignment keeps review constrained and elevates only commit
   )
 
   assert.match(source, /const ALIGNMENT_SANDBOX = 'workspace-write'/)
+  assert.match(source, /const ALIGNMENT_APPROVAL_MODE = 'never'/)
   assert.match(source, /const COMMIT_SANDBOX = 'danger-full-access'/)
   assert.match(source, /const COMMIT_APPROVAL_MODE = 'never'/)
   assert.match(source, /sandbox: ALIGNMENT_SANDBOX/)
+  assert.match(source, /approvalMode: ALIGNMENT_APPROVAL_MODE/)
   assert.match(source, /sandbox: COMMIT_SANDBOX/)
   assert.match(source, /approvalMode: COMMIT_APPROVAL_MODE/)
+  assert.doesNotMatch(source, /--full-auto/)
 })
 
 test('constitutional alignment prompt treats committed .runework as the sanctioned dogfood boundary', async () => {
@@ -355,5 +360,29 @@ test('constitutional alignment prompt treats committed .runework as the sanction
   assert.match(
     source,
     /Do NOT create, move, or rename that repo-local boundary to a separate dogfood\/ folder/,
+  )
+})
+
+test('constitutional alignment prompt treats the constitution as the only normative source', async () => {
+  const source = await readFile(
+    new URL('../../../.runework/pipelines/constitutional-alignment.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /The constitution is the only normative source in this pipeline\./,
+  )
+  assert.match(
+    source,
+    /Do NOT use existing documentation, comments, or current implementation to justify behavior that conflicts with the constitution\./,
+  )
+  assert.match(
+    source,
+    /Treat documentation as potentially stale or wrong\./,
+  )
+  assert.match(
+    source,
+    /Do NOT cite README text, docs prose, or comments as the reason a constitutional deviation is acceptable\./,
   )
 })

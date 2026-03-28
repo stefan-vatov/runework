@@ -12,7 +12,11 @@
   },
   "files": [
     "dist",
-    "src"
+    "src/gitignore.ts",
+    "src/index.ts",
+    "src/runner.ts",
+    "src/runtime.ts",
+    "src/types.ts"
   ],
   "dependencies": {
     "@runework/core": "0.1.1"

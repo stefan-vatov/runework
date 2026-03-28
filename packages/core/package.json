@@ -27,7 +27,11 @@
   },
   "files": [
     "dist",
-    "src"
+    "src/adapters",
+    "src/core",
+    "src/index.ts",
+    "src/models.ts",
+    "src/zx.ts"
   ],
   "dependencies": {
     "zx": "^8.0.0"

@@ -97,6 +97,34 @@ test('buildCodexArgs preserves supported codex approval modes verbatim', () => {
   ])
 })
 
+test('buildCodexArgs maps never + danger-full-access to Codex bypass flag', () => {
+  const args = buildCodexArgs(
+    {
+      prompt: 'Commit these changes',
+      cwd: '/repo',
+      model: 'gpt-5.4',
+      sandbox: 'danger-full-access',
+      approvalMode: 'never',
+    },
+    {
+      outputFile: '/tmp/codex-last-message.txt',
+    },
+  )
+
+  assert.deepEqual(args, [
+    'exec',
+    '-C',
+    '/repo',
+    '--dangerously-bypass-approvals-and-sandbox',
+    '-m',
+    'gpt-5.4',
+    '--json',
+    '--output-last-message',
+    '/tmp/codex-last-message.txt',
+    '-',
+  ])
+})
+
 test('buildCodexArgs rejects schema output for resumed exec sessions', () => {
   assert.throws(
     () =>
@@ -112,6 +140,24 @@ test('buildCodexArgs rejects schema output for resumed exec sessions', () => {
         },
       ),
     /codex does not support request option\(s\): schema when resuming exec sessions/,
+  )
+})
+
+test('buildCodexArgs rejects conflicting Codex extra args when typed sandbox or approval is set', () => {
+  assert.throws(
+    () =>
+      buildCodexArgs(
+        {
+          prompt: 'Commit these changes',
+          sandbox: 'danger-full-access',
+          approvalMode: 'never',
+          extraArgs: ['--full-auto'],
+        },
+        {
+          outputFile: '/tmp/codex-last-message.txt',
+        },
+      ),
+    /codex extraArgs cannot include --full-auto or bypass flags/,
   )
 })
 

@@ -58,6 +58,56 @@ type CodexArgFiles = {
   schemaFile?: string
 }
 
+const CODEX_BYPASS_FLAG = '--dangerously-bypass-approvals-and-sandbox'
+const CODEX_YOLO_FLAG = '--yolo'
+
+function hasCodexArg(args: string[] | undefined, flag: string): boolean {
+  if (!args?.length) return false
+  return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`))
+}
+
+function assertNoConflictingCodexExtraArgs(request: AgentRunRequest): void {
+  const extraArgs = request.extraArgs
+  if (!extraArgs?.length) return
+
+  if (
+    (request.sandbox || request.approvalMode)
+    && (
+      hasCodexArg(extraArgs, '--full-auto')
+      || hasCodexArg(extraArgs, CODEX_BYPASS_FLAG)
+      || hasCodexArg(extraArgs, CODEX_YOLO_FLAG)
+    )
+  ) {
+    throw new Error(
+      'codex extraArgs cannot include --full-auto or bypass flags when request.sandbox or request.approvalMode is set. Use the typed request fields as the single source of truth.',
+    )
+  }
+
+  if (
+    request.sandbox
+    && (
+      hasCodexArg(extraArgs, '--sandbox')
+      || extraArgs.includes('-s')
+    )
+  ) {
+    throw new Error(
+      'codex extraArgs cannot override sandbox when request.sandbox is set. Use request.sandbox instead.',
+    )
+  }
+
+  if (
+    request.approvalMode
+    && (
+      hasCodexArg(extraArgs, '--ask-for-approval')
+      || extraArgs.includes('-a')
+    )
+  ) {
+    throw new Error(
+      'codex extraArgs cannot override approval mode when request.approvalMode is set. Use request.approvalMode instead.',
+    )
+  }
+}
+
 export function buildCodexArgs(
   request: AgentRunRequest,
   files: CodexArgFiles,
@@ -68,16 +118,22 @@ export function buildCodexArgs(
       'codex does not support request option(s): schema when resuming exec sessions. Pass provider-specific CLI flags via extraArgs instead.',
     )
   }
+  assertNoConflictingCodexExtraArgs(request)
 
   const args: string[] = []
+  const useDangerousBypass = request.sandbox === 'danger-full-access' && request.approvalMode === 'never'
 
   // Codex keeps approval policy on the top-level parser even for `exec`.
-  if (request.approvalMode) args.push('-a', request.approvalMode)
+  if (!useDangerousBypass && request.approvalMode) args.push('-a', request.approvalMode)
 
   const execArgs: string[] = ['exec']
 
   if (request.cwd) execArgs.push('-C', request.cwd)
-  if (request.sandbox) execArgs.push('-s', request.sandbox)
+  if (useDangerousBypass) {
+    execArgs.push(CODEX_BYPASS_FLAG)
+  } else if (request.sandbox) {
+    execArgs.push('-s', request.sandbox)
+  }
 
   if (files.schemaFile) {
     execArgs.push('--output-schema', files.schemaFile)

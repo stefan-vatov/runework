@@ -1489,14 +1489,16 @@ test('constitutional-alignment rolls back an invalid commit when retries fail', 
     entry.stdin.includes('You are a senior engineer performing a constitutional alignment review.'))
   assert.ok(alignmentInvocation)
   assert.ok(alignmentInvocation.args.includes('workspace-write'))
+  assert.ok(alignmentInvocation.args.includes('-a') && alignmentInvocation.args.includes('never'))
   assert.ok(!alignmentInvocation.args.includes('danger-full-access'))
 
   const commitInvocations = execInvocations.filter((entry) =>
     entry.stdin.includes('You are a developer committing code changes.')
     || entry.stdin.includes('You are a developer fixing a failed commit attempt.'))
   assert.equal(commitInvocations.length, 2)
-  assert.ok(commitInvocations.every((entry) => entry.args.includes('danger-full-access')))
-  assert.ok(commitInvocations.every((entry) => entry.args.includes('-a') && entry.args.includes('never')))
+  assert.ok(commitInvocations.every((entry) => entry.args.includes('--dangerously-bypass-approvals-and-sandbox')))
+  assert.ok(commitInvocations.every((entry) => !entry.args.includes('danger-full-access')))
+  assert.ok(commitInvocations.every((entry) => !entry.args.includes('-a')))
 
   assert.equal(runCommand('git', ['rev-parse', 'HEAD'], repoRoot).stdout.trim(), initialHead)
   assert.equal(

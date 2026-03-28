@@ -13,8 +13,9 @@ import {
 } from '../scripts/pipeline-ui-contract.ts'
 
 const CODEX_MODEL = 'gpt-5.4'
-const CODEX_EXTRA_ARGS = ['--full-auto', '--config', 'model_reasoning_effort=xhigh']
+const CODEX_EXTRA_ARGS = ['--config', 'model_reasoning_effort=xhigh']
 const ALIGNMENT_SANDBOX = 'workspace-write'
+const ALIGNMENT_APPROVAL_MODE = 'never'
 const COMMIT_SANDBOX = 'danger-full-access'
 const COMMIT_APPROVAL_MODE = 'never'
 const ALIGNMENT_CYCLE_COUNT = 2
@@ -244,6 +245,9 @@ Your task:
 4. Fix every deviation you find directly in the codebase.
 
 Decision policy:
+- The constitution is the only normative source in this pipeline. Current code, documentation, tests, and dogfood workflows are evidence about the repo, not authority over the constitution.
+- Do NOT use existing documentation, comments, or current implementation to justify behavior that conflicts with the constitution.
+- Treat documentation as potentially stale or wrong. If docs conflict with the constitution, align docs to the constitution after fixing the underlying code or package surface.
 - Prefer changing implementation to satisfy the constitution over deleting validation that exposes the problem.
 - Treat tests, typechecks, publish checks, smoke tests, and dogfood pipelines as contract evidence, not disposable cleanup targets.
 - If a repo-local workflow is too opinionated or uses the wrong abstraction, rewrite it onto runework primitives instead of removing the coverage it provides.
@@ -262,6 +266,7 @@ Rules:
 - If you are unsure whether a test or dogfood workflow is guarding an intentional contract, stop and leave it in place.
 - Stay idiomatic to the existing codebase style.
 - If a deviation is ambiguous, favor the constitutional principle over current implementation.
+- Do NOT cite README text, docs prose, or comments as the reason a constitutional deviation is acceptable.
 
 Execution sequence:
 1. Identify the principle being violated and the concrete files involved.
@@ -431,6 +436,7 @@ async function reviewAndFix(ctx: AlignmentPhaseContext): Promise<AlignmentStateP
       cwd: ctx.repoRoot,
       model: CODEX_MODEL,
       sandbox: ALIGNMENT_SANDBOX,
+      approvalMode: ALIGNMENT_APPROVAL_MODE,
       extraArgs: CODEX_EXTRA_ARGS,
       timeoutMs: 60 * 60 * 1000,
       onOutputChunk: streamReporter.onOutputChunk,
