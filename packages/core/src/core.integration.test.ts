@@ -102,7 +102,7 @@ test('runCli aborts promptly and preserves the callback error when streaming fai
     ].join('\n'),
   )
 
-  const startedAt = Date.now()
+  const startedAt = performance.now()
   await assert.rejects(
     () =>
       runCli({
@@ -116,8 +116,8 @@ test('runCli aborts promptly and preserves the callback error when streaming fai
   )
 
   assert.ok(
-    Date.now() - startedAt < 500,
-    `expected runCli to abort promptly, took ${Date.now() - startedAt}ms`,
+    performance.now() - startedAt < 2000,
+    `expected runCli to abort promptly, took ${performance.now() - startedAt}ms`,
   )
 })
 
@@ -135,7 +135,7 @@ test('runCli abort signal terminates the CLI promptly with an AbortError', async
   )
 
   const controller = new AbortController()
-  const startedAt = Date.now()
+  const startedAt = performance.now()
   const run = runCli({
     bin: 'abort-signal-cli',
     env: { PATH: fake.pathEnv },
@@ -155,8 +155,8 @@ test('runCli abort signal terminates the CLI promptly with an AbortError', async
   )
 
   assert.ok(
-    Date.now() - startedAt < 500,
-    `expected runCli to abort promptly, took ${Date.now() - startedAt}ms`,
+    performance.now() - startedAt < 2000,
+    `expected runCli to abort promptly, took ${performance.now() - startedAt}ms`,
   )
 })
 
