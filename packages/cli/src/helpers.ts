@@ -41,12 +41,11 @@ export function defaultRuneworkDependency(
 }
 
 export function defaultRuneworkPipelinesDependency(
+  runeworkPipelinesVersion: string,
   runeworkRoot: string,
   currentDir: string,
 ): string {
-  // runework-pipelines is not yet published to npm, so we use github reference
-  // When it is published, this should return `^${packageVersion}` like the above
   return basename(dirname(currentDir)) === 'src'
     ? `file:${resolve(runeworkRoot, '..', '..', 'runework-pipelines')}`
-    : `github:stefan-vatov/runework-pipelines`
+    : `^${runeworkPipelinesVersion}`
 }

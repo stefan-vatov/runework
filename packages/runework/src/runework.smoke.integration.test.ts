@@ -135,8 +135,12 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
     await readFile(join(targetDir, '.runework', 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string> }
   assert.equal(generatedPkg.dependencies?.runework, `^${manifest.version}`)
-  // runework-pipelines uses github ref since it's not published to npm yet
-  assert.ok(generatedPkg.dependencies?.['runework-pipelines'], 'should have runework-pipelines dependency')
+  // runework-pipelines uses a versioned release contract (^0.1.0) for packaged installs
+  assert.equal(
+    generatedPkg.dependencies?.['runework-pipelines'],
+    '^0.1.0',
+    'runework-pipelines should use a versioned release contract',
+  )
 
   const runeworkDir = join(targetDir, '.runework')
   const scriptsDir = join(runeworkDir, 'scripts')

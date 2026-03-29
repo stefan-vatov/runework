@@ -7,6 +7,7 @@ import { defaultRuneworkDependency, defaultRuneworkPipelinesDependency } from '.
 export type InitDeps = {
   packageRoot: string
   packageVersion: string
+  runeworkPipelinesVersion: string
   templatesRuneworkDir: string
   currentDir: string
   runCliFn?: typeof runCli
@@ -73,6 +74,7 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
     deps.currentDir,
   )
   const runeworkPipelinesUrl = defaultRuneworkPipelinesDependency(
+    deps.runeworkPipelinesVersion,
     deps.packageRoot,
     deps.currentDir,
   )

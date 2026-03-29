@@ -173,6 +173,7 @@ test('initCommand scaffolds .runework/ with injected deps', async (t) => {
       {
         packageRoot: runeworkRoot,
         packageVersion: '0.1.0',
+        runeworkPipelinesVersion: '0.1.0',
         templatesRuneworkDir: join(runeworkRoot, 'templates', 'runework'),
         currentDir: join(runeworkRoot, 'src', 'cli'),
       },
@@ -232,6 +233,7 @@ test('initCommand installs dependencies through the shared runner contract', asy
     {
       packageRoot: runeworkRoot,
       packageVersion: '0.1.0',
+      runeworkPipelinesVersion: '0.1.0',
       templatesRuneworkDir: join(runeworkRoot, 'templates', 'runework'),
       currentDir: join(runeworkRoot, 'src', 'cli'),
       runCliFn: async (opts) => {
@@ -274,6 +276,7 @@ test('initCommand returns 1 when .runework/ exists without --force', async (t) =
     {
       packageRoot: runeworkRoot,
       packageVersion: '0.1.0',
+      runeworkPipelinesVersion: '0.1.0',
       templatesRuneworkDir: join(runeworkRoot, 'templates', 'runework'),
       currentDir: join(runeworkRoot, 'src', 'cli'),
     },
@@ -298,6 +301,7 @@ test('initCommand surfaces install failures instead of silently continuing', asy
         {
           packageRoot: runeworkRoot,
           packageVersion: '0.1.0',
+          runeworkPipelinesVersion: '0.1.0',
           templatesRuneworkDir: join(runeworkRoot, 'templates', 'runework'),
           currentDir: join(runeworkRoot, 'src', 'cli'),
           runCliFn: async (opts) => ({

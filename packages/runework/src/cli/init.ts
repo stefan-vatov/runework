@@ -9,6 +9,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // In src/cli/init.ts via tsx → package root is also ../../
 const RUNEWORK_ROOT = join(__dirname, '..', '..')
 
+// runework-pipelines version - update when a new version is published to npm
+const RUNEWORK_PIPELINES_VERSION = '0.1.0'
+
 async function main() {
   const manifest = JSON.parse(
     await readFile(join(RUNEWORK_ROOT, 'package.json'), 'utf8'),
@@ -17,6 +20,7 @@ async function main() {
   const code = await initCommand(process.argv.slice(2), {
     packageRoot: RUNEWORK_ROOT,
     packageVersion: manifest.version ?? '0.1.0',
+    runeworkPipelinesVersion: RUNEWORK_PIPELINES_VERSION,
     templatesRuneworkDir: join(RUNEWORK_ROOT, 'templates', 'runework'),
     currentDir: __dirname,
   })
