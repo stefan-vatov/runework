@@ -84,15 +84,9 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
   if (process.env.RUNEWORK_PIPELINES_VERSION) {
     runeworkPipelinesUrl = `^${process.env.RUNEWORK_PIPELINES_VERSION}`
   } else if (basename(dirname(deps.currentDir)) === 'src') {
-    // Use relative path from .runework/ to runework-pipelines for copied context compatibility
-    // runework-pipelines is a sibling of runework/, not inside runework/
-    // packageRoot is .../runework/packages/runework/ or .../runework-work/runework/packages/runework/
-    // dirname(packageRoot) = .../runework/packages/ or .../runework-work/runework/packages/
-    // dirname(dirname(packageRoot)) = .../runework/ or .../runework-work/runework/
-    // We need the workspace root which is .../runework-work/ or .../, so we need one more dirname
-    const workspaceRoot = dirname(dirname(dirname(deps.packageRoot)))
-    const runeworkPipelinesTarget = resolve(workspaceRoot, 'runework-pipelines')
-    runeworkPipelinesUrl = `file:${relative(runeworkDir, runeworkPipelinesTarget)}`
+    // Use git URL for runework-pipelines in dogfood/src context
+    // file: paths break when repo is copied to temp locations
+    runeworkPipelinesUrl = `github:stefan-vatov/runework-pipelines`
   } else {
     runeworkPipelinesUrl = `^${deps.runeworkPipelinesVersion}`
   }
