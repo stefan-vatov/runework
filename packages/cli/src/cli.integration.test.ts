@@ -185,13 +185,27 @@ test('initCommand scaffolds .runework/ with injected deps', async (t) => {
     await readFile(join(targetDir, '.runework', 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string> }
   assert.equal(pkg.dependencies?.runework, `file:${runeworkRoot}`)
+  assert.equal(
+    pkg.dependencies?.['runework-pipelines'],
+    `file:${resolve(runeworkRoot, '..', '..', 'runework-pipelines')}`,
+  )
 
   const scriptsDir = join(targetDir, '.runework', 'scripts')
   const pipelinesDir = join(targetDir, '.runework', 'pipelines')
   assert.equal((await stat(scriptsDir)).isDirectory(), true)
   assert.equal((await stat(pipelinesDir)).isDirectory(), true)
   assert.deepEqual(await readdir(scriptsDir), [])
-  assert.deepEqual(await readdir(pipelinesDir), [])
+
+  // Pipelines dir should contain thin re-export stubs for ready-made pipelines
+  const pipelineFiles = await readdir(pipelinesDir)
+  assert.ok(pipelineFiles.includes('code-review.ts'), 'should contain code-review.ts re-export')
+  assert.ok(pipelineFiles.includes('constitutional-alignment.ts'), 'should contain constitutional-alignment.ts re-export')
+
+  const codeReviewContent = await readFile(join(pipelinesDir, 'code-review.ts'), 'utf8')
+  assert.match(codeReviewContent, /runework-pipelines\/code-review/)
+
+  const constitutionalContent = await readFile(join(pipelinesDir, 'constitutional-alignment.ts'), 'utf8')
+  assert.match(constitutionalContent, /runework-pipelines\/constitutional-alignment/)
 })
 
 test('initCommand installs dependencies through the shared runner contract', async (t) => {

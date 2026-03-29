@@ -453,6 +453,7 @@ test('runework-init supports --force and scaffolds a blank .runework package', a
     await readFile(join(runeworkDir, 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string>; scripts?: Record<string, string> }
   assert.equal(generatedPkg.dependencies?.runework, `file:${join(process.cwd(), 'packages', 'runework')}`)
+  assert.ok(generatedPkg.dependencies?.['runework-pipelines'], 'should have runework-pipelines dependency')
   assert.equal(generatedPkg.scripts, undefined)
 
   const generatedTsconfig = JSON.parse(
@@ -468,7 +469,17 @@ test('runework-init supports --force and scaffolds a blank .runework package', a
   assert.equal((await stat(scriptsDir)).isDirectory(), true)
   assert.equal((await stat(pipelinesDir)).isDirectory(), true)
   assert.deepEqual(await readdir(scriptsDir), [])
-  assert.deepEqual(await readdir(pipelinesDir), [])
+
+  // Pipelines dir should contain thin re-export stubs for ready-made pipelines
+  const pipelineFiles = await readdir(pipelinesDir)
+  assert.ok(pipelineFiles.includes('code-review.ts'), 'should contain code-review.ts re-export')
+  assert.ok(pipelineFiles.includes('constitutional-alignment.ts'), 'should contain constitutional-alignment.ts re-export')
+
+  const codeReviewContent = await readFile(join(pipelinesDir, 'code-review.ts'), 'utf8')
+  assert.match(codeReviewContent, /runework-pipelines\/code-review/)
+
+  const constitutionalContent = await readFile(join(pipelinesDir, 'constitutional-alignment.ts'), 'utf8')
+  assert.match(constitutionalContent, /runework-pipelines\/constitutional-alignment/)
 
   const gitignore = await readFile(join(targetDir, '.gitignore'), 'utf8')
   assert.match(gitignore, /\.runework\/node_modules/)
