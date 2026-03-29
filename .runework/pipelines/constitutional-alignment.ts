@@ -10,7 +10,7 @@ import {
   emitDogfoodJob,
   emitDogfoodRun,
   type DogfoodJobDescriptor,
-} from '../scripts/pipeline-ui-contract.ts'
+} from 'runework-pipelines/lib'
 
 const CODEX_MODEL = 'gpt-5.4'
 const CODEX_EXTRA_ARGS = ['--config', 'model_reasoning_effort=xhigh']

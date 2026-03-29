@@ -9,7 +9,7 @@ import {
   emitDogfoodJob,
   emitDogfoodRun,
   type DogfoodJobDescriptor,
-} from '../scripts/pipeline-ui-contract.ts'
+} from 'runework-pipelines/lib'
 
 type ReviewerName = 'claude' | 'codex' | 'opencode'
 

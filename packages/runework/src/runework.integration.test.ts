@@ -82,6 +82,7 @@ async function createDogfoodRepo(t: { after: (cleanup: () => Promise<void>) => v
   await writeFile(join(runeworkDir, 'pipelines', 'code-review.ts'), reviewPipeline, 'utf8')
   await writeFile(join(runeworkDir, 'scripts', 'pipeline-ui-contract.ts'), pipelineUiContract, 'utf8')
   await symlink(join(process.cwd(), 'packages', 'runework'), join(runeworkDir, 'node_modules', 'runework'), 'dir')
+  await symlink(join(process.cwd(), '..', 'runework-pipelines'), join(runeworkDir, 'node_modules', 'runework-pipelines'), 'dir')
   await writeFile(join(repoRoot, 'README.md'), '# temp repo\n', 'utf8')
   await writeFile(join(repoRoot, '.gitignore'), '.runework/node_modules/\n.runework/.work/\n', 'utf8')
 
