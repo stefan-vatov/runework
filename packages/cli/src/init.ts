@@ -73,11 +73,17 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
     deps.packageRoot,
     deps.currentDir,
   )
-  const runeworkPipelinesUrl = defaultRuneworkPipelinesDependency(
-    deps.runeworkPipelinesVersion,
-    deps.packageRoot,
-    deps.currentDir,
-  )
+
+  // When RUNEWORK_PIPELINES_VERSION is set (e.g., in smoke tests), use it directly as a versioned
+  // dependency. Otherwise, use defaultRuneworkPipelinesDependency which handles local dev (file: URL)
+  // vs packaged CLI (versioned URL) based on currentDir.
+  const runeworkPipelinesUrl = process.env.RUNEWORK_PIPELINES_VERSION
+    ? `^${process.env.RUNEWORK_PIPELINES_VERSION}`
+    : defaultRuneworkPipelinesDependency(
+        deps.runeworkPipelinesVersion,
+        deps.packageRoot,
+        deps.currentDir,
+      )
 
   if (await exists(runeworkDir)) {
     if (!flags.force) {

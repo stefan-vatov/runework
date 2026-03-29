@@ -128,11 +128,18 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
   )
 
   const initBin = join(consumerDir, 'node_modules', '.bin', initBinName)
+  // Pass RUNEWORK_PIPELINES_VERSION so the packed CLI can derive the correct version
+  // even when runework-pipelines/package.json is not available locally
+  const initEnv: NodeJS.ProcessEnv = {
+    ...npmEnv,
+    RUNEWORK_PIPELINES_VERSION: pipelinesManifest.version,
+  }
   assertSucceeded(
     runCommand(
       initBin,
       [targetDir, '--no-install'],
       consumerDir,
+      { env: initEnv },
     ),
     'installed runework-init failed',
   )
