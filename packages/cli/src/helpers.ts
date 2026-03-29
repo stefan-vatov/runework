@@ -46,6 +46,6 @@ export function defaultRuneworkPipelinesDependency(
   currentDir: string,
 ): string {
   return basename(dirname(currentDir)) === 'src'
-    ? `file:${resolve(runeworkRoot, '..', '..', 'runework-pipelines')}`
+    ? `file:${resolve(dirname(dirname(dirname(runeworkRoot))), 'runework-pipelines')}`
     : `^${runeworkPipelinesVersion}`
 }
