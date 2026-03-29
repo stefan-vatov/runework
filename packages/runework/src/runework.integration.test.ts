@@ -12,7 +12,7 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import test from 'node:test'
 
 function runCommand(
@@ -452,8 +452,11 @@ test('runework-init supports --force and scaffolds a blank .runework package', a
   const generatedPkg = JSON.parse(
     await readFile(join(runeworkDir, 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string>; scripts?: Record<string, string> }
-  assert.equal(generatedPkg.dependencies?.runework, `file:${join(process.cwd(), 'packages', 'runework')}`)
-  assert.ok(generatedPkg.dependencies?.['runework-pipelines'], 'should have runework-pipelines dependency')
+  // Use relative paths for copied context compatibility
+  const runeworkRoot = join(process.cwd(), 'packages', 'runework')
+  const runeworkPipelinesTarget = resolve(runeworkRoot, '..', '..', 'runework-pipelines')
+  assert.equal(generatedPkg.dependencies?.runework, `file:${relative(runeworkDir, runeworkRoot)}`)
+  assert.equal(generatedPkg.dependencies?.['runework-pipelines'], `file:${relative(runeworkDir, runeworkPipelinesTarget)}`)
   assert.equal(generatedPkg.scripts, undefined)
 
   const generatedTsconfig = JSON.parse(

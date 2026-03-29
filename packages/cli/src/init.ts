@@ -1,8 +1,7 @@
 import { cp, mkdir, readFile, rm, writeFile, stat } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { renderTemplate, runCli } from '@runework/core'
 import { ensureGitignoreEntries } from '@runework/pipelines'
-import { defaultRuneworkDependency, defaultRuneworkPipelinesDependency } from './helpers.ts'
 
 export type InitDeps = {
   packageRoot: string
@@ -68,22 +67,31 @@ async function installRuneworkDependencies(
 export async function initCommand(argv: string[], deps: InitDeps): Promise<number> {
   const flags = parseArgs(argv)
   const runeworkDir = join(flags.targetDir, '.runework')
-  const runeworkUrl = flags.runeworkUrl ?? defaultRuneworkDependency(
-    deps.packageVersion,
-    deps.packageRoot,
-    deps.currentDir,
-  )
 
-  // When RUNEWORK_PIPELINES_VERSION is set (e.g., in smoke tests), use it directly as a versioned
-  // dependency. Otherwise, use defaultRuneworkPipelinesDependency which handles local dev (file: URL)
-  // vs packaged CLI (versioned URL) based on currentDir.
-  const runeworkPipelinesUrl = process.env.RUNEWORK_PIPELINES_VERSION
-    ? `^${process.env.RUNEWORK_PIPELINES_VERSION}`
-    : defaultRuneworkPipelinesDependency(
-        deps.runeworkPipelinesVersion,
-        deps.packageRoot,
-        deps.currentDir,
-      )
+  // Compute URL for runework dependency
+  let runeworkUrl: string
+  if (flags.runeworkUrl) {
+    runeworkUrl = flags.runeworkUrl
+  } else if (basename(dirname(deps.currentDir)) === 'src') {
+    // Use relative path from .runework/ to packages/runework for copied context compatibility
+    runeworkUrl = `file:${relative(runeworkDir, deps.packageRoot)}`
+  } else {
+    runeworkUrl = `^${deps.packageVersion}`
+  }
+
+  // Compute URL for runework-pipelines dependency
+  let runeworkPipelinesUrl: string
+  if (process.env.RUNEWORK_PIPELINES_VERSION) {
+    runeworkPipelinesUrl = `^${process.env.RUNEWORK_PIPELINES_VERSION}`
+  } else if (basename(dirname(deps.currentDir)) === 'src') {
+    // Use relative path from .runework/ to runework-pipelines for copied context compatibility
+    // resolve(runeworkRoot, '..', '..', 'runework-pipelines') gives the absolute path to runework-pipelines
+    // relative(runeworkDir, ...) then computes the relative path from .runework/ to that location
+    const runeworkPipelinesTarget = resolve(deps.packageRoot, '..', '..', 'runework-pipelines')
+    runeworkPipelinesUrl = `file:${relative(runeworkDir, runeworkPipelinesTarget)}`
+  } else {
+    runeworkPipelinesUrl = `^${deps.runeworkPipelinesVersion}`
+  }
 
   if (await exists(runeworkDir)) {
     if (!flags.force) {

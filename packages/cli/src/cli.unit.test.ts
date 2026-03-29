@@ -35,6 +35,10 @@ test('CLI helper functions compute runtime paths and exit codes safely', () => {
     defaultRuneworkDependency('0.1.0', '/pkg', '/pkg/dist/cli'),
     '^0.1.0',
   )
+  assert.equal(
+    defaultRuneworkDependency('0.1.0', '/pkg', '/pkg/dist/cli'),
+    '^0.1.0',
+  )
 })
 
 test('runCommand returns 1 when no arguments provided', async () => {

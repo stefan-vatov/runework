@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { delimiter, join, resolve } from 'node:path'
+import { delimiter, join, relative, resolve } from 'node:path'
 import test from 'node:test'
 
 import { detectCommand } from './detect.ts'
@@ -185,11 +185,14 @@ test('initCommand scaffolds .runework/ with injected deps', async (t) => {
   const pkg = JSON.parse(
     await readFile(join(targetDir, '.runework', 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string> }
-  assert.equal(pkg.dependencies?.runework, `file:${runeworkRoot}`)
-  assert.equal(
-    pkg.dependencies?.['runework-pipelines'],
-    `file:${resolve(runeworkRoot, '..', '..', 'runework-pipelines')}`,
-  )
+  // runeworkRoot is targetDir/packages/runework
+  // .runework is at targetDir/.runework
+  // runework-pipelines is at monorepo/runework-pipelines (sibling to runework/)
+  // Use resolve to get absolute path, then relative to get relative path from .runework/
+  const runeworkDir = join(targetDir, '.runework')
+  const runeworkPipelinesTarget = resolve(runeworkRoot, '..', '..', 'runework-pipelines')
+  assert.equal(pkg.dependencies?.runework, `file:${relative(runeworkDir, runeworkRoot)}`)
+  assert.equal(pkg.dependencies?.['runework-pipelines'], `file:${relative(runeworkDir, runeworkPipelinesTarget)}`)
 
   const scriptsDir = join(targetDir, '.runework', 'scripts')
   const pipelinesDir = join(targetDir, '.runework', 'pipelines')
