@@ -79,6 +79,12 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
     await readFile(join(packageRoot, 'package.json'), 'utf8'),
   ) as { version: string }
 
+  // Derive runework-pipelines version from the package's own metadata
+  // to ensure smoke test stays in sync with the actual released version
+  const pipelinesManifest = JSON.parse(
+    await readFile(join(workspaceRoot, '..', 'runework-pipelines', 'package.json'), 'utf8'),
+  ) as { version: string }
+
   const packDir = join(tmpRoot, 'pack')
   const consumerDir = join(tmpRoot, 'consumer')
   const targetDir = join(consumerDir, 'repo')
@@ -135,10 +141,11 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
     await readFile(join(targetDir, '.runework', 'package.json'), 'utf8'),
   ) as { dependencies?: Record<string, string> }
   assert.equal(generatedPkg.dependencies?.runework, `^${manifest.version}`)
-  // runework-pipelines uses a versioned release contract (^0.1.0) for packaged installs
+  // runework-pipelines version is derived from runework-pipelines/package.json
+  // to keep smoke test in sync with the actual released version
   assert.equal(
     generatedPkg.dependencies?.['runework-pipelines'],
-    '^0.1.0',
+    `^${pipelinesManifest.version}`,
     'runework-pipelines should use a versioned release contract',
   )
 
