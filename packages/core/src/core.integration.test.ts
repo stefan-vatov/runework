@@ -116,7 +116,7 @@ test('runCli aborts promptly and preserves the callback error when streaming fai
   )
 
   assert.ok(
-    performance.now() - startedAt < 2000,
+    performance.now() - startedAt < 700,
     `expected runCli to abort promptly, took ${performance.now() - startedAt}ms`,
   )
 })
@@ -155,7 +155,7 @@ test('runCli abort signal terminates the CLI promptly with an AbortError', async
   )
 
   assert.ok(
-    performance.now() - startedAt < 2000,
+    performance.now() - startedAt < 300,
     `expected runCli to abort promptly, took ${performance.now() - startedAt}ms`,
   )
 })
