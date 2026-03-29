@@ -62,10 +62,10 @@ test('runCli emits stdout/stderr chunks while preserving aggregated output', asy
     'stream-cli',
     [
       '#!/usr/bin/env node',
-      "setTimeout(() => process.stdout.write('out-1\\n'), 5)",
-      "setTimeout(() => process.stderr.write('err-1\\n'), 10)",
-      "setTimeout(() => process.stdout.write('out-2\\n'), 15)",
-      'setTimeout(() => process.exit(0), 25)',
+      "setTimeout(() => process.stdout.write('out-1\\n'), 10)",
+      "setTimeout(() => process.stderr.write('err-1\\n'), 100)",
+      "setTimeout(() => process.stdout.write('out-2\\n'), 200)",
+      'setTimeout(() => process.exit(0), 300)',
       '',
     ].join('\n'),
   )
