@@ -8,4 +8,5 @@ export {
   resolveRuneworkDir,
   runResultExitCode,
   defaultRuneworkDependency,
+  defaultRuneworkPipelinesDependency,
 } from './helpers.ts'

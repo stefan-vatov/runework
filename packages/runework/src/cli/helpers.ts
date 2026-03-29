@@ -3,4 +3,5 @@ export {
   resolveRuneworkDir,
   runResultExitCode,
   defaultRuneworkDependency,
+  defaultRuneworkPipelinesDependency,
 } from '@runework/cli'

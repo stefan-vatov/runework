@@ -189,7 +189,8 @@ test('initCommand scaffolds .runework/ with injected deps', async (t) => {
   // .runework is at targetDir/.runework
   const runeworkDir = join(targetDir, '.runework')
   assert.equal(pkg.dependencies?.runework, `file:${relative(runeworkDir, runeworkRoot)}`)
-  assert.equal(pkg.dependencies?.['runework-pipelines'], `github:stefan-vatov/runework-pipelines`)
+  const localPipelinesRoot = resolve(runeworkRoot, '..', '..', '..', 'runework-pipelines')
+  assert.equal(pkg.dependencies?.['runework-pipelines'], `file:${relative(runeworkDir, localPipelinesRoot)}`)
 
   const scriptsDir = join(targetDir, '.runework', 'scripts')
   const pipelinesDir = join(targetDir, '.runework', 'pipelines')

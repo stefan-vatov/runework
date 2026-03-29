@@ -2,6 +2,12 @@ import { basename, dirname, resolve } from 'node:path'
 
 import type { AgentRunResult } from '@runework/core'
 
+const GITHUB_OWNER = 'stefan-vatov'
+
+function taggedGitHubDependency(repo: string, version: string): string {
+  return `github:${GITHUB_OWNER}/${repo}#v${version}`
+}
+
 export function consumeFlag(argv: string[], flag: string): { enabled: boolean; rest: string[] } {
   let enabled = false
   const rest: string[] = []
@@ -37,7 +43,7 @@ export function defaultRuneworkDependency(
 ): string {
   return basename(dirname(currentDir)) === 'src'
     ? `file:${runeworkRoot}`
-    : `^${packageVersion}`
+    : taggedGitHubDependency('runework', packageVersion)
 }
 
 export function defaultRuneworkPipelinesDependency(
@@ -46,6 +52,6 @@ export function defaultRuneworkPipelinesDependency(
   currentDir: string,
 ): string {
   return basename(dirname(currentDir)) === 'src'
-    ? `github:stefan-vatov/runework-pipelines`
-    : `^${runeworkPipelinesVersion}`
+    ? `file:${resolve(runeworkRoot, '..', '..', '..', 'runework-pipelines')}`
+    : taggedGitHubDependency('runework-pipelines', runeworkPipelinesVersion)
 }

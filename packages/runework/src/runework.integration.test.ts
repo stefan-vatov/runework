@@ -454,7 +454,11 @@ test('runework-init supports --force and scaffolds a blank .runework package', a
   ) as { dependencies?: Record<string, string>; scripts?: Record<string, string> }
   const runeworkRoot = join(process.cwd(), 'packages', 'runework')
   assert.equal(generatedPkg.dependencies?.runework, `file:${relative(runeworkDir, runeworkRoot)}`)
-  assert.equal(generatedPkg.dependencies?.['runework-pipelines'], `github:stefan-vatov/runework-pipelines`)
+  const localPipelinesRoot = join(process.cwd(), '..', 'runework-pipelines')
+  assert.equal(
+    generatedPkg.dependencies?.['runework-pipelines'],
+    `file:${relative(runeworkDir, localPipelinesRoot)}`,
+  )
   assert.equal(generatedPkg.scripts, undefined)
 
   const generatedTsconfig = JSON.parse(
@@ -577,7 +581,7 @@ test('runPipeline rejects invalid review scopes instead of reporting a clean dif
   )
 
   assert.ok(progressEvents.some((event) =>
-    event.type === 'dogfood:job'
+    event.type === 'pipeline:job'
     && event.jobId === 'cycle:1:review:collect-diff'
     && event.status === 'failed',
   ))
@@ -612,7 +616,7 @@ test('code-review emits a failed prepare job when no supported CLI tools are ins
   )
 
   assert.ok(progressEvents.some((event) =>
-    event.type === 'dogfood:job'
+    event.type === 'pipeline:job'
     && event.jobId === 'prepare:detect-tools'
     && event.status === 'failed',
   ))
@@ -830,24 +834,24 @@ test('code-review emits progress events and starts reviewer jobs before any revi
 
   assert.equal(result.ok, true)
 
-  const dogfoodEvents = progressEvents.filter(
-    (event) => typeof event.type === 'string' && event.type.startsWith('dogfood:'),
+  const pipelineEvents = progressEvents.filter(
+    (event) => typeof event.type === 'string' && event.type.startsWith('pipeline:'),
   )
 
-  const firstReviewerTerminalJobIndex = dogfoodEvents.findIndex((event) =>
-    event.type === 'dogfood:job'
+  const firstReviewerTerminalJobIndex = pipelineEvents.findIndex((event) =>
+    event.type === 'pipeline:job'
     && typeof event.jobId === 'string'
     && (event.jobId === 'cycle:1:review:claude' || event.jobId === 'cycle:1:review:codex')
     && typeof event.status === 'string'
     && ['success', 'failed'].includes(event.status),
   )
-  const claudeRunningIndex = dogfoodEvents.findIndex((event) =>
-    event.type === 'dogfood:job'
+  const claudeRunningIndex = pipelineEvents.findIndex((event) =>
+    event.type === 'pipeline:job'
     && event.jobId === 'cycle:1:review:claude'
     && event.status === 'running',
   )
-  const codexRunningIndex = dogfoodEvents.findIndex((event) =>
-    event.type === 'dogfood:job'
+  const codexRunningIndex = pipelineEvents.findIndex((event) =>
+    event.type === 'pipeline:job'
     && event.jobId === 'cycle:1:review:codex'
     && event.status === 'running',
   )
@@ -855,13 +859,13 @@ test('code-review emits progress events and starts reviewer jobs before any revi
   assert.ok(claudeRunningIndex >= 0)
   assert.ok(codexRunningIndex >= 0)
   assert.ok(firstReviewerTerminalJobIndex > Math.max(claudeRunningIndex, codexRunningIndex))
-  assert.ok(dogfoodEvents.some((event) =>
-    event.type === 'dogfood:run'
+  assert.ok(pipelineEvents.some((event) =>
+    event.type === 'pipeline:run'
     && event.pipelineName === 'code-review'
     && typeof event.runId === 'string',
   ))
-  assert.ok(dogfoodEvents.some((event) =>
-    event.type === 'dogfood:output'
+  assert.ok(pipelineEvents.some((event) =>
+    event.type === 'pipeline:output'
     && event.jobId === 'cycle:1:review:claude'
     && event.stream === 'stdout',
   ))
@@ -957,7 +961,7 @@ test('code-review emits a failed synthesis job when synthesis stream handling th
           progressEvents.push(event)
           if (
             !threwDuringSynthesisOutput
-            && event.type === 'dogfood:output'
+            && event.type === 'pipeline:output'
             && event.jobId === 'cycle:1:review:synthesize'
           ) {
             threwDuringSynthesisOutput = true
@@ -970,7 +974,7 @@ test('code-review emits a failed synthesis job when synthesis stream handling th
 
   assert.equal(threwDuringSynthesisOutput, true)
   assert.ok(progressEvents.some((event) =>
-    event.type === 'dogfood:job'
+    event.type === 'pipeline:job'
     && event.jobId === 'cycle:1:review:synthesize'
     && event.status === 'failed'
     && event.detail === 'synthetic synthesis progress failure',

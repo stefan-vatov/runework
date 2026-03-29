@@ -174,17 +174,17 @@ test('dogfood stream reporter emits an immediate startup line and readable provi
   reporter.flush()
 
   assert.deepEqual(
-    events.filter((event) => event.type === 'dogfood:output'),
+    events.filter((event) => event.type === 'pipeline:output'),
     [
       {
-        type: 'dogfood:output',
+        type: 'pipeline:output',
         jobId: 'cycle:1:align:review-and-fix',
         provider: 'codex',
         stream: 'stdout',
         text: 'launching codex...',
       },
       {
-        type: 'dogfood:output',
+        type: 'pipeline:output',
         jobId: 'cycle:1:align:review-and-fix',
         provider: 'codex',
         stream: 'stdout',
@@ -283,6 +283,39 @@ test('repo-local pipeline script uses source exports during development', async 
     packageJson.scripts?.pipeline,
     'node --conditions=source .runework/scripts/pipeline.ts',
   )
+})
+
+test('repo-local .runework package dogsfoods the sibling runework-pipelines checkout', async () => {
+  const packageJson = JSON.parse(
+    await readFile(new URL('../../../.runework/package.json', import.meta.url), 'utf8'),
+  ) as {
+    dependencies?: Record<string, string>
+    scripts?: Record<string, string>
+  }
+
+  assert.equal(packageJson.dependencies?.runework, 'file:../packages/runework')
+  assert.equal(packageJson.dependencies?.['runework-pipelines'], 'file:../../runework-pipelines')
+  assert.equal(packageJson.scripts?.pipeline, 'node --conditions=source scripts/pipeline.ts')
+})
+
+test('repo-local pipeline script delegates execution to runework-pipelines', async () => {
+  const source = await readFile(
+    new URL('../../../.runework/scripts/pipeline.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /from 'runework-pipelines\/runner'/)
+  assert.match(source, /runPipelineCli/)
+})
+
+test('repo-local pipeline UI helpers are thin re-exports to runework-pipelines', async () => {
+  const source = await readFile(
+    new URL('../../../.runework/scripts/pipeline-ui.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /from 'runework-pipelines\/runner'/)
+  assert.doesNotMatch(source, /function buildStreamViewportLines|function extractMouseWheelDelta/)
 })
 
 test('code-review dogfood pipeline is a thin re-export to runework-pipelines', async () => {

@@ -76,19 +76,19 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
     // Use relative path from .runework/ to packages/runework for copied context compatibility
     runeworkUrl = `file:${relative(runeworkDir, deps.packageRoot)}`
   } else {
-    runeworkUrl = `^${deps.packageVersion}`
+    runeworkUrl = `github:stefan-vatov/runework#v${deps.packageVersion}`
   }
 
   // Compute URL for runework-pipelines dependency
   let runeworkPipelinesUrl: string
   if (process.env.RUNEWORK_PIPELINES_VERSION) {
-    runeworkPipelinesUrl = `^${process.env.RUNEWORK_PIPELINES_VERSION}`
+    runeworkPipelinesUrl = `github:stefan-vatov/runework-pipelines#v${process.env.RUNEWORK_PIPELINES_VERSION}`
   } else if (basename(dirname(deps.currentDir)) === 'src') {
-    // Use git URL for runework-pipelines in dogfood/src context
-    // file: paths break when repo is copied to temp locations
-    runeworkPipelinesUrl = `github:stefan-vatov/runework-pipelines`
+    // In source-mode local development, dogfood the sibling runework-pipelines checkout.
+    const runeworkPipelinesRoot = resolve(deps.packageRoot, '..', '..', '..', 'runework-pipelines')
+    runeworkPipelinesUrl = `file:${relative(runeworkDir, runeworkPipelinesRoot)}`
   } else {
-    runeworkPipelinesUrl = `^${deps.runeworkPipelinesVersion}`
+    runeworkPipelinesUrl = `github:stefan-vatov/runework-pipelines#v${deps.runeworkPipelinesVersion}`
   }
 
   if (await exists(runeworkDir)) {
