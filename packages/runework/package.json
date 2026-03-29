@@ -1,7 +1,7 @@
 {
   "name": "runework",
   "private": false,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "license": "MIT",
   "description": "thin zx runtime for durable AI CLI workflows across providers",
@@ -64,9 +64,9 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@runework/cli": "0.2.0",
-    "@runework/core": "0.2.0",
-    "@runework/pipelines": "0.2.0",
+    "@runework/cli": "0.3.0",
+    "@runework/core": "0.3.0",
+    "@runework/pipelines": "0.3.0",
     "zx": "^8.0.0"
   },
   "bundleDependencies": [
