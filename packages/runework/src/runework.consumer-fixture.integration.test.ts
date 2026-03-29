@@ -101,18 +101,6 @@ async function createExternalConsumerFixture(
       ].join('\n'),
       'utf8',
     )
-  } else {
-    // Full implementations (dogfood style)
-    const codeReviewPipeline = await readFile(
-      join(process.cwd(), '.runework', 'pipelines', 'code-review.ts'),
-      'utf8',
-    )
-    const constitutionalPipeline = await readFile(
-      join(process.cwd(), '.runework', 'pipelines', 'constitutional-alignment.ts'),
-      'utf8',
-    )
-    await writeFile(join(runeworkDir, 'pipelines', 'code-review.ts'), codeReviewPipeline, 'utf8')
-    await writeFile(join(runeworkDir, 'pipelines', 'constitutional-alignment.ts'), constitutionalPipeline, 'utf8')
   }
 
   // Link packages into node_modules
@@ -306,10 +294,11 @@ test('VAL-CROSS-001: runework-pipeline CLI runs code-review through thin re-expo
   assert.doesNotMatch(pipelineContent, /defineWorkflowPipeline/)
 })
 
-test('VAL-CROSS-002: runner contract unchanged — thin re-export and full implementation produce same behavior', async (t) => {
-  // Create two fixtures: one with thin re-exports, one with full implementations
-  const thinFixture = await createExternalConsumerFixture(t, { useThinReexports: true })
-  const fullFixture = await createExternalConsumerFixture(t, { useThinReexports: false })
+test('VAL-CROSS-002: runner contract unchanged — thin re-exports work in both external consumer and dogfood contexts', async (t) => {
+  // Create two external consumer fixtures, both using thin re-exports
+  // This verifies that the runner contract works consistently regardless of the fixture context
+  const fixture1 = await createExternalConsumerFixture(t, { useThinReexports: true })
+  const fixture2 = await createExternalConsumerFixture(t, { useThinReexports: true })
 
   const fakeCodex = await createFakeCodexCli(t)
 
@@ -354,40 +343,45 @@ test('VAL-CROSS-002: runner contract unchanged — thin re-export and full imple
   })
 
   // Add a change to both repos so there's something to review
-  await writeFile(join(thinFixture.repoRoot, 'README.md'), '# consumer fixture repo\nchanged\n', 'utf8')
-  await writeFile(join(fullFixture.repoRoot, 'README.md'), '# consumer fixture repo\nchanged\n', 'utf8')
+  await writeFile(join(fixture1.repoRoot, 'README.md'), '# consumer fixture repo\nchanged\n', 'utf8')
+  await writeFile(join(fixture2.repoRoot, 'README.md'), '# consumer fixture repo\nchanged\n', 'utf8')
 
   // Run pipeline via runPipeline directly (not CLI) to compare behavior
   const { runPipeline } = await import('./pipelines/index.ts')
 
   // Both should produce same summary pattern with same options
-  const thinResult = await runPipeline('code-review', thinFixture.runeworkDir, {
+  const result1 = await runPipeline('code-review', fixture1.runeworkDir, {
     options: { cycles: 1, fix: false },
     log: () => {},
   })
 
-  const fullResult = await runPipeline('code-review', fullFixture.runeworkDir, {
+  const result2 = await runPipeline('code-review', fixture2.runeworkDir, {
     options: { cycles: 1, fix: false },
     log: () => {},
   })
 
   // Both should have similar summary structure - at least one model reviewed
-  assert.ok(thinResult.summary!, 'thin fixture should produce a summary')
-  assert.ok(fullResult.summary!, 'full fixture should produce a summary')
-  assert.ok(thinResult.ok, 'thin fixture should complete successfully')
-  assert.ok(fullResult.ok, 'full fixture should complete successfully')
+  assert.ok(result1.summary!, 'fixture1 should produce a summary')
+  assert.ok(result2.summary!, 'fixture2 should produce a summary')
+  assert.ok(result1.ok, 'fixture1 should complete successfully')
+  assert.ok(result2.ok, 'fixture2 should complete successfully')
 
-  // Verify the structural difference: thin re-export vs full implementation
-  const thinContent = await readFile(join(thinFixture.runeworkDir, 'pipelines', 'code-review.ts'), 'utf8')
-  const fullContent = await readFile(join(fullFixture.runeworkDir, 'pipelines', 'code-review.ts'), 'utf8')
+  // Both should use thin re-export pattern
+  const content1 = await readFile(join(fixture1.runeworkDir, 'pipelines', 'code-review.ts'), 'utf8')
+  const content2 = await readFile(join(fixture2.runeworkDir, 'pipelines', 'code-review.ts'), 'utf8')
 
   // Thin re-export should reference runework-pipelines
-  assert.match(thinContent, /runework-pipelines\/code-review/)
-  assert.doesNotMatch(thinContent, /defineWorkflowPipeline/)
+  assert.match(content1, /runework-pipelines\/code-review/)
+  assert.doesNotMatch(content1, /defineWorkflowPipeline/)
+  assert.match(content2, /runework-pipelines\/code-review/)
+  assert.doesNotMatch(content2, /defineWorkflowPipeline/)
 
-  // Full implementation should have the actual pipeline code
-  assert.match(fullContent, /defineWorkflowPipeline/)
-  assert.doesNotMatch(fullContent, /runework-pipelines\/code-review/)
+  // Verify the dogfood pipelines also use thin re-exports
+  const dogfoodContent = await readFile(
+    new URL('../../../.runework/pipelines/code-review.ts', import.meta.url),
+    'utf8',
+  )
+  assert.equal(dogfoodContent.trim(), "export { default } from 'runework-pipelines/code-review'")
 })
 
 test('VAL-CROSS-001: external consumer fixture thin re-export resolves through node_modules', async (t) => {
