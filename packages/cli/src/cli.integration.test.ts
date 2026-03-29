@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { delimiter, join, relative, resolve } from 'node:path'
+import { delimiter, dirname, join, relative, resolve } from 'node:path'
 import test from 'node:test'
 
 import { detectCommand } from './detect.ts'
@@ -190,7 +190,9 @@ test('initCommand scaffolds .runework/ with injected deps', async (t) => {
   // runework-pipelines is at monorepo/runework-pipelines (sibling to runework/)
   // Use resolve to get absolute path, then relative to get relative path from .runework/
   const runeworkDir = join(targetDir, '.runework')
-  const runeworkPipelinesTarget = resolve(runeworkRoot, '..', '..', 'runework-pipelines')
+  // runework-pipelines is a sibling of runework/, not inside runework/
+  // dirname(dirname(dirname(runeworkRoot))) goes up to the workspace root
+  const runeworkPipelinesTarget = resolve(dirname(dirname(dirname(runeworkRoot))), 'runework-pipelines')
   assert.equal(pkg.dependencies?.runework, `file:${relative(runeworkDir, runeworkRoot)}`)
   assert.equal(pkg.dependencies?.['runework-pipelines'], `file:${relative(runeworkDir, runeworkPipelinesTarget)}`)
 

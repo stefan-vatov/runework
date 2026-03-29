@@ -12,7 +12,7 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import test from 'node:test'
 
 function runCommand(
@@ -454,7 +454,9 @@ test('runework-init supports --force and scaffolds a blank .runework package', a
   ) as { dependencies?: Record<string, string>; scripts?: Record<string, string> }
   // Use relative paths for copied context compatibility
   const runeworkRoot = join(process.cwd(), 'packages', 'runework')
-  const runeworkPipelinesTarget = resolve(runeworkRoot, '..', '..', 'runework-pipelines')
+  // runework-pipelines is a sibling of runework/, not inside runework/
+  // dirname(dirname(dirname(runeworkRoot))) goes up to the workspace root
+  const runeworkPipelinesTarget = resolve(dirname(dirname(dirname(runeworkRoot))), 'runework-pipelines')
   assert.equal(generatedPkg.dependencies?.runework, `file:${relative(runeworkDir, runeworkRoot)}`)
   assert.equal(generatedPkg.dependencies?.['runework-pipelines'], `file:${relative(runeworkDir, runeworkPipelinesTarget)}`)
   assert.equal(generatedPkg.scripts, undefined)

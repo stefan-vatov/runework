@@ -85,9 +85,13 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
     runeworkPipelinesUrl = `^${process.env.RUNEWORK_PIPELINES_VERSION}`
   } else if (basename(dirname(deps.currentDir)) === 'src') {
     // Use relative path from .runework/ to runework-pipelines for copied context compatibility
-    // resolve(runeworkRoot, '..', '..', 'runework-pipelines') gives the absolute path to runework-pipelines
-    // relative(runeworkDir, ...) then computes the relative path from .runework/ to that location
-    const runeworkPipelinesTarget = resolve(deps.packageRoot, '..', '..', 'runework-pipelines')
+    // runework-pipelines is a sibling of runework/, not inside runework/
+    // packageRoot is .../runework/packages/runework/ or .../runework-work/runework/packages/runework/
+    // dirname(packageRoot) = .../runework/packages/ or .../runework-work/runework/packages/
+    // dirname(dirname(packageRoot)) = .../runework/ or .../runework-work/runework/
+    // We need the workspace root which is .../runework-work/ or .../, so we need one more dirname
+    const workspaceRoot = dirname(dirname(dirname(deps.packageRoot)))
+    const runeworkPipelinesTarget = resolve(workspaceRoot, 'runework-pipelines')
     runeworkPipelinesUrl = `file:${relative(runeworkDir, runeworkPipelinesTarget)}`
   } else {
     runeworkPipelinesUrl = `^${deps.runeworkPipelinesVersion}`
