@@ -6,7 +6,6 @@ import { ensureGitignoreEntries } from '@runework/pipelines'
 export type InitDeps = {
   packageRoot: string
   packageVersion: string
-  runeworkPipelinesVersion: string
   templatesRuneworkDir: string
   currentDir: string
   runCliFn?: typeof runCli
@@ -81,14 +80,12 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
 
   // Compute URL for runework-pipelines dependency
   let runeworkPipelinesUrl: string
-  if (process.env.RUNEWORK_PIPELINES_VERSION) {
-    runeworkPipelinesUrl = `github:stefan-vatov/runework-pipelines#v${process.env.RUNEWORK_PIPELINES_VERSION}`
-  } else if (basename(dirname(deps.currentDir)) === 'src') {
+  if (basename(dirname(deps.currentDir)) === 'src') {
     // In source-mode local development, dogfood the sibling runework-pipelines checkout.
     const runeworkPipelinesRoot = resolve(deps.packageRoot, '..', '..', '..', 'runework-pipelines')
     runeworkPipelinesUrl = `file:${relative(runeworkDir, runeworkPipelinesRoot)}`
   } else {
-    runeworkPipelinesUrl = `github:stefan-vatov/runework-pipelines#v${deps.runeworkPipelinesVersion}`
+    runeworkPipelinesUrl = 'github:stefan-vatov/runework-pipelines#main'
   }
 
   if (await exists(runeworkDir)) {

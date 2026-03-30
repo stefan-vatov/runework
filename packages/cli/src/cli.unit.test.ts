@@ -46,7 +46,7 @@ test('CLI helper functions compute runtime paths and exit codes safely', () => {
   )
   assert.equal(
     defaultRuneworkPipelinesDependency('0.1.0', '/pkg', '/pkg/dist/cli'),
-    'github:stefan-vatov/runework-pipelines#v0.1.0',
+    'github:stefan-vatov/runework-pipelines#main',
   )
 })
 

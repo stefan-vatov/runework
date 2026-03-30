@@ -15,6 +15,6 @@
     "src"
   ],
   "dependencies": {
-    "@runework/core": "0.2.0"
+    "@runework/core": "file:../core"
   }
 }

@@ -79,12 +79,6 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
     await readFile(join(packageRoot, 'package.json'), 'utf8'),
   ) as { version: string }
 
-  // Derive runework-pipelines version from the package's own metadata
-  // to ensure smoke test stays in sync with the actual released version
-  const pipelinesManifest = JSON.parse(
-    await readFile(join(workspaceRoot, '..', 'runework-pipelines', 'package.json'), 'utf8'),
-  ) as { version: string }
-
   const packDir = join(tmpRoot, 'pack')
   const consumerDir = join(tmpRoot, 'consumer')
   const targetDir = join(consumerDir, 'repo')
@@ -128,18 +122,12 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
   )
 
   const initBin = join(consumerDir, 'node_modules', '.bin', initBinName)
-  // Pass RUNEWORK_PIPELINES_VERSION so the packed CLI can derive the correct version
-  // even when runework-pipelines/package.json is not available locally
-  const initEnv: NodeJS.ProcessEnv = {
-    ...npmEnv,
-    RUNEWORK_PIPELINES_VERSION: pipelinesManifest.version,
-  }
   assertSucceeded(
     runCommand(
       initBin,
       [targetDir, '--no-install'],
       consumerDir,
-      { env: initEnv },
+      { env: npmEnv },
     ),
     'installed runework-init failed',
   )
@@ -151,12 +139,10 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
     generatedPkg.dependencies?.runework,
     `github:stefan-vatov/runework#v${manifest.version}`,
   )
-  // runework-pipelines version is derived from runework-pipelines/package.json
-  // to keep smoke test in sync with the actual tagged GitHub release contract
   assert.equal(
     generatedPkg.dependencies?.['runework-pipelines'],
-    `github:stefan-vatov/runework-pipelines#v${pipelinesManifest.version}`,
-    'runework-pipelines should use a tagged GitHub release contract',
+    'github:stefan-vatov/runework-pipelines#main',
+    'runework-pipelines should track main during prelaunch',
   )
 
   const runeworkDir = join(targetDir, '.runework')

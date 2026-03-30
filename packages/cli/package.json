@@ -14,8 +14,8 @@
     "dist"
   ],
   "dependencies": {
-    "@runework/core": "0.3.0",
-    "@runework/pipelines": "0.3.0",
+    "@runework/core": "file:../core",
+    "@runework/pipelines": "file:../pipelines",
     "zx": "^8.0.0"
   }
 }

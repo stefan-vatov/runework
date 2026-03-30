@@ -19,6 +19,6 @@
     "src/types.ts"
   ],
   "dependencies": {
-    "@runework/core": "0.3.0"
+    "@runework/core": "file:../core"
   }
 }
