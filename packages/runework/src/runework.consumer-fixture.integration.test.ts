@@ -17,11 +17,12 @@ import test from 'node:test'
  * Integration tests for the external consumer fixture flow.
  *
  * These tests validate VAL-CROSS-001 and VAL-CROSS-002:
- * - VAL-CROSS-001: External consumer can run code-review end-to-end through the split architecture
+ * - VAL-CROSS-001: External consumer can opt into adjacent workflow packages through the split architecture
  * - VAL-CROSS-002: Runner behavior remains unchanged across dogfood and external consumer contexts
  *
- * The tests use thin re-export pipeline files (as scaffolded by runework-init) rather than
- * embedded full implementations, simulating how an external consumer would use the packages.
+ * The public scaffold stays blank by default. These fixtures model a consumer repo that
+ * explicitly opts into an adjacent workflow package by authoring thin re-export pipeline
+ * files locally, rather than embedding full implementations.
  */
 
 function runCommand(
@@ -66,9 +67,9 @@ async function linkExecutable(binDir: string, name: string, target: string): Pro
 
 async function createExternalConsumerFixture(
   t: { after: (cleanup: () => Promise<void> | void) => void },
-  options?: { useThinReexports?: boolean },
+  options?: { seedAdjacentWorkflowReexports?: boolean },
 ): Promise<{ repoRoot: string; runeworkDir: string }> {
-  const useThinReexports = options?.useThinReexports ?? true
+  const seedAdjacentWorkflowReexports = options?.seedAdjacentWorkflowReexports ?? false
 
   const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-consumer-fixture-'))
   t.after(async () => {
@@ -81,8 +82,8 @@ async function createExternalConsumerFixture(
   await mkdir(join(runeworkDir, 'scripts'), { recursive: true })
   await mkdir(join(runeworkDir, 'node_modules'), { recursive: true })
 
-  if (useThinReexports) {
-    // Thin re-export stubs (as scaffolded by runework-init)
+  if (seedAdjacentWorkflowReexports) {
+    // Consumer-authored thin re-export stubs for an adjacent workflow package.
     await writeFile(
       join(runeworkDir, 'pipelines', 'code-review.ts'),
       [
@@ -121,10 +122,17 @@ async function createExternalConsumerFixture(
   assertSucceeded(runCommand('git', ['init', '-b', 'main'], repoRoot), 'git init failed in consumer fixture')
   assertSucceeded(runCommand('git', ['config', 'user.name', 'Runework Consumer Tests'], repoRoot), 'git config user.name failed')
   assertSucceeded(runCommand('git', ['config', 'user.email', 'runework-consumer@example.com'], repoRoot), 'git config user.email failed')
+  const trackedPaths = ['README.md', '.gitignore']
+  if (seedAdjacentWorkflowReexports) {
+    trackedPaths.push(
+      '.runework/pipelines/code-review.ts',
+      '.runework/pipelines/constitutional-alignment.ts',
+    )
+  }
   assertSucceeded(
     runCommand(
       'git',
-      ['add', 'README.md', '.gitignore', '.runework/pipelines/code-review.ts', '.runework/pipelines/constitutional-alignment.ts'],
+      ['add', ...trackedPaths],
       repoRoot,
     ),
     'git add failed in consumer fixture',
@@ -218,8 +226,11 @@ async function createFakeCodexCli(t: { after: (cleanup: () => Promise<void> | vo
   return { binDir, logPath }
 }
 
-test('VAL-CROSS-001: runework-pipeline CLI runs code-review through thin re-export in external consumer fixture', async (t) => {
-  const { repoRoot, runeworkDir } = await createExternalConsumerFixture(t, { useThinReexports: true })
+test('VAL-CROSS-001: runework-pipeline CLI runs code-review through opt-in thin re-export in external consumer fixture', async (t) => {
+  const { repoRoot, runeworkDir } = await createExternalConsumerFixture(
+    t,
+    { seedAdjacentWorkflowReexports: true },
+  )
   const fakeCodex = await createFakeCodexCli(t)
 
   // Set up environment BEFORE running the pipeline
@@ -306,7 +317,10 @@ test('VAL-CROSS-002: runner contract unchanged — CLI in external consumer, dir
   //
   // This proves the runner contract works correctly in both contexts without dedicated runner changes.
 
-  const fixture = await createExternalConsumerFixture(t, { useThinReexports: true })
+  const fixture = await createExternalConsumerFixture(
+    t,
+    { seedAdjacentWorkflowReexports: true },
+  )
   const fakeCodex = await createFakeCodexCli(t)
 
   // Set up environment with fake codex
@@ -411,8 +425,11 @@ test('VAL-CROSS-002: runner contract unchanged — CLI in external consumer, dir
   assert.match(dogfoodResult.summary!, /Review complete|cycles?/i)
 })
 
-test('VAL-CROSS-001: external consumer fixture thin re-export resolves through node_modules', async (t) => {
-  const { repoRoot } = await createExternalConsumerFixture(t, { useThinReexports: true })
+test('VAL-CROSS-001: external consumer fixture opt-in thin re-export resolves through node_modules', async (t) => {
+  const { repoRoot } = await createExternalConsumerFixture(
+    t,
+    { seedAdjacentWorkflowReexports: true },
+  )
   const fakeCodex = await createFakeCodexCli(t)
 
   // Set up environment with fake codex
@@ -516,8 +533,7 @@ console.log('ok')
   assert.ok(payload.summary.includes('Review complete'), `Expected Review complete in summary, got: ${payload.summary}`)
 })
 
-test('thin re-export files are identical to what runework-init scaffolds', async () => {
-  // Read the thin re-export content that runework-init generates
+test('opt-in thin re-export files match the adjacent workflow package contract', async () => {
   const expectedCodeReview = [
     '// Thin re-export — pipeline source of truth lives in runework-pipelines',
     "export { default } from 'runework-pipelines/code-review'",
@@ -530,39 +546,34 @@ test('thin re-export files are identical to what runework-init scaffolds', async
     '',
   ].join('\n')
 
-  // Create a fixture and verify the generated content matches expected
-  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-scaffold-verify-'))
-  const targetDir = join(tmpRoot, 'repo')
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-adjacent-workflow-verify-'))
+  try {
+    const targetDir = join(tmpRoot, 'repo')
+    await mkdir(join(targetDir, '.runework', 'pipelines'), { recursive: true })
 
-  // Use runework-init to scaffold
-  const initBin = resolve('packages/runework/src/cli/init.ts')
-  const initResult = spawnSync(
-    process.execPath,
-    ['--conditions=source', initBin, targetDir, '--no-install'],
-    {
-      encoding: 'utf8',
-    },
-  )
+    await writeFile(
+      join(targetDir, '.runework', 'pipelines', 'code-review.ts'),
+      expectedCodeReview,
+      'utf8',
+    )
+    await writeFile(
+      join(targetDir, '.runework', 'pipelines', 'constitutional-alignment.ts'),
+      expectedConstitutionalAlignment,
+      'utf8',
+    )
 
-  assert.equal(
-    initResult.status,
-    0,
-    `runework-init failed:\nstderr: ${initResult.stderr}`,
-  )
+    const generatedCodeReview = await readFile(
+      join(targetDir, '.runework', 'pipelines', 'code-review.ts'),
+      'utf8',
+    )
+    const generatedConstitutionalAlignment = await readFile(
+      join(targetDir, '.runework', 'pipelines', 'constitutional-alignment.ts'),
+      'utf8',
+    )
 
-  // Read the generated thin re-exports
-  const generatedCodeReview = await readFile(
-    join(targetDir, '.runework', 'pipelines', 'code-review.ts'),
-    'utf8',
-  )
-  const generatedConstitutionalAlignment = await readFile(
-    join(targetDir, '.runework', 'pipelines', 'constitutional-alignment.ts'),
-    'utf8',
-  )
-
-  assert.equal(generatedCodeReview, expectedCodeReview, 'code-review.ts thin re-export should match expected')
-  assert.equal(generatedConstitutionalAlignment, expectedConstitutionalAlignment, 'constitutional-alignment.ts thin re-export should match expected')
-
-  // Cleanup
-  await rm(tmpRoot, { recursive: true, force: true })
+    assert.equal(generatedCodeReview, expectedCodeReview, 'code-review.ts thin re-export should match expected')
+    assert.equal(generatedConstitutionalAlignment, expectedConstitutionalAlignment, 'constitutional-alignment.ts thin re-export should match expected')
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true })
+  }
 })

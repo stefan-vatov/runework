@@ -157,7 +157,7 @@ test('pipelineCommand keeps --json output structured when option parsing fails',
   assert.match(payload.error, /--resume-run requires a run ID/)
 })
 
-test('initCommand scaffolds .runework/ with injected deps', async (t) => {
+test('initCommand scaffolds a blank .runework package without starter pipelines', async (t) => {
   const tmpRoot = await mkdtemp(join(tmpdir(), 'runework-cli-init-'))
   t.after(async () => {
     await rm(tmpRoot, { recursive: true, force: true })
@@ -188,25 +188,14 @@ test('initCommand scaffolds .runework/ with injected deps', async (t) => {
   // .runework is at targetDir/.runework
   const runeworkDir = join(targetDir, '.runework')
   assert.equal(pkg.dependencies?.runework, `file:${relative(runeworkDir, runeworkRoot)}`)
-  const localPipelinesRoot = resolve(runeworkRoot, '..', '..', '..', 'runework-pipelines')
-  assert.equal(pkg.dependencies?.['runework-pipelines'], `file:${relative(runeworkDir, localPipelinesRoot)}`)
+  assert.equal(pkg.dependencies?.['runework-pipelines'], undefined)
 
   const scriptsDir = join(targetDir, '.runework', 'scripts')
   const pipelinesDir = join(targetDir, '.runework', 'pipelines')
   assert.equal((await stat(scriptsDir)).isDirectory(), true)
   assert.equal((await stat(pipelinesDir)).isDirectory(), true)
   assert.deepEqual(await readdir(scriptsDir), [])
-
-  // Pipelines dir should contain thin re-export stubs for ready-made pipelines
-  const pipelineFiles = await readdir(pipelinesDir)
-  assert.ok(pipelineFiles.includes('code-review.ts'), 'should contain code-review.ts re-export')
-  assert.ok(pipelineFiles.includes('constitutional-alignment.ts'), 'should contain constitutional-alignment.ts re-export')
-
-  const codeReviewContent = await readFile(join(pipelinesDir, 'code-review.ts'), 'utf8')
-  assert.match(codeReviewContent, /runework-pipelines\/code-review/)
-
-  const constitutionalContent = await readFile(join(pipelinesDir, 'constitutional-alignment.ts'), 'utf8')
-  assert.match(constitutionalContent, /runework-pipelines\/constitutional-alignment/)
+  assert.deepEqual(await readdir(pipelinesDir), [])
 })
 
 test('initCommand installs dependencies through the shared runner contract', async (t) => {

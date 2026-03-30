@@ -1,3 +1,13 @@
+## Unreleased
+
+### 🩹 Fixes
+
+- restore `runework-init` to a constitutional blank scaffold; consumer repos no longer receive `runework-pipelines` or starter pipeline re-exports
+
+### ℹ️ Notes
+
+- `0.3.0` briefly experimented with scaffolding dogfood pipeline re-exports into consumer repos. That behavior has been reverted so the runtime stays zero-out-of-the-box and consumer policy remains user-owned.
+
 ## 0.3.1 (2026-03-30)
 
 ### 🩹 Fixes
