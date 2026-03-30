@@ -1,7 +1,7 @@
 {
   "name": "@runework/pipelines",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "exports": {
     ".": {
@@ -19,6 +19,6 @@
     "src/types.ts"
   ],
   "dependencies": {
-    "@runework/core": "0.3.1"
+    "@runework/core": "0.3.2"
   }
 }

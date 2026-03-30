@@ -1,3 +1,13 @@
+## 0.3.2 (2026-03-30)
+
+### 🩹 Fixes
+
+- restore constitutional scaffold boundaries ([b83c58a](https://github.com/stefan-vatov/runework/commit/b83c58a))
+
+### ❤️ Thank You
+
+- Stefan Vatov
+
 ## Unreleased
 
 ### 🩹 Fixes
