@@ -8,6 +8,16 @@
 
 - `0.3.0` briefly experimented with scaffolding dogfood pipeline re-exports into consumer repos. That behavior has been reverted so the runtime stays zero-out-of-the-box and consumer policy remains user-owned.
 
+## 0.3.1 (2026-03-30)
+
+### 🩹 Fixes
+
+- simplify source wiring for pipelines ([8d8c7ec](https://github.com/stefan-vatov/runework/commit/8d8c7ec))
+
+### ❤️ Thank You
+
+- Stefan Vatov
+
 ## 0.3.0 (2026-03-29)
 
 ### 🚀 Features
