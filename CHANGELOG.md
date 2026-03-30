@@ -1,3 +1,13 @@
+## 0.3.4 (2026-03-30)
+
+### 🩹 Fixes
+
+- publish github release objects ([342fbc6](https://github.com/stefan-vatov/runework/commit/342fbc6))
+
+### ❤️ Thank You
+
+- Stefan Vatov
+
 ## 0.3.3 (2026-03-30)
 
 ### 🩹 Fixes
