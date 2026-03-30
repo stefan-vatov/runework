@@ -1,3 +1,13 @@
+## 0.3.3 (2026-03-30)
+
+### 🩹 Fixes
+
+- publish github releases from tags ([ee7f82d](https://github.com/stefan-vatov/runework/commit/ee7f82d))
+
+### ❤️ Thank You
+
+- Stefan Vatov
+
 ## 0.3.2 (2026-03-30)
 
 ### 🩹 Fixes
