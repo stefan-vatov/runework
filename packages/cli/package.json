@@ -1,7 +1,7 @@
 {
   "name": "@runework/cli",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "exports": {
     ".": {
@@ -14,8 +14,8 @@
     "dist"
   ],
   "dependencies": {
-    "@runework/core": "file:../core",
-    "@runework/pipelines": "file:../pipelines",
+    "@runework/core": "0.3.1",
+    "@runework/pipelines": "0.3.1",
     "zx": "^8.0.0"
   }
 }
