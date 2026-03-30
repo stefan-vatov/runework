@@ -78,16 +78,6 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
     runeworkUrl = `github:stefan-vatov/runework#v${deps.packageVersion}`
   }
 
-  // Compute URL for runework-pipelines dependency
-  let runeworkPipelinesUrl: string
-  if (basename(dirname(deps.currentDir)) === 'src') {
-    // In source-mode local development, dogfood the sibling runework-pipelines checkout.
-    const runeworkPipelinesRoot = resolve(deps.packageRoot, '..', '..', '..', 'runework-pipelines')
-    runeworkPipelinesUrl = `file:${relative(runeworkDir, runeworkPipelinesRoot)}`
-  } else {
-    runeworkPipelinesUrl = 'github:stefan-vatov/runework-pipelines#main'
-  }
-
   if (await exists(runeworkDir)) {
     if (!flags.force) {
       console.error('runework: .runework/ already exists. Use --force or delete it first.')
@@ -105,54 +95,33 @@ export async function initCommand(argv: string[], deps: InitDeps): Promise<numbe
 
   // 2. Write package.json from template.
   const pkgTemplate = await readFile(join(deps.templatesRuneworkDir, 'package.json.tmpl'), 'utf8')
-  const pkgContent = renderTemplate(pkgTemplate, { runeworkUrl, runeworkPipelinesUrl })
+  const pkgContent = renderTemplate(pkgTemplate, { runeworkUrl })
   await writeFile(join(runeworkDir, 'package.json'), pkgContent, 'utf8')
 
   // 3. Copy tsconfig.json.
   await cp(join(deps.templatesRuneworkDir, 'tsconfig.json'), join(runeworkDir, 'tsconfig.json'))
 
-  // 4. Write thin re-export pipeline stubs for ready-made pipelines.
-  const pipelinesDir = join(runeworkDir, 'pipelines')
-  await writeFile(
-    join(pipelinesDir, 'code-review.ts'),
-    [
-      '// Thin re-export — pipeline source of truth lives in runework-pipelines',
-      "export { default } from 'runework-pipelines/code-review'",
-      '',
-    ].join('\n'),
-    'utf8',
-  )
-  await writeFile(
-    join(pipelinesDir, 'constitutional-alignment.ts'),
-    [
-      '// Thin re-export — pipeline source of truth lives in runework-pipelines',
-      "export { default } from 'runework-pipelines/constitutional-alignment'",
-      '',
-    ].join('\n'),
-    'utf8',
-  )
-
-  // 5. Update .gitignore.
+  // 4. Update .gitignore.
   await ensureGitignoreEntries(flags.targetDir, [
     '.runework/node_modules',
     '.runework/.work',
   ])
 
-  // 6. Install dependencies.
+  // 5. Install dependencies.
   if (!flags.noInstall) {
     console.error('runework: installing dependencies...')
     await installRuneworkDependencies(runeworkDir, deps.runCliFn ?? runCli)
   }
 
-  // 7. Summary.
+  // 6. Summary.
   console.error('')
   console.error('runework: initialized .runework/ directory')
   console.error('')
   console.error('  .runework/')
-  console.error('    package.json        deps (runework + runework-pipelines)')
+  console.error('    package.json        deps (runework + zx)')
   console.error('    tsconfig.json       IDE support')
   console.error('    scripts/            user-authored scripts')
-  console.error('    pipelines/          user-authored durable pipelines + ready-made re-exports')
+  console.error('    pipelines/          user-authored durable pipelines')
   console.error('    .work/              created lazily on first run (gitignored)')
   console.error('')
   console.error('Author your own scripts and pipelines inside .runework/.')

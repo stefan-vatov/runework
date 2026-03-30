@@ -7,7 +7,6 @@ import {
   resolveRuneworkDir,
   runResultExitCode,
   defaultRuneworkDependency,
-  defaultRuneworkPipelinesDependency,
 } from './helpers.ts'
 import { runCommand } from './run.ts'
 
@@ -39,14 +38,6 @@ test('CLI helper functions compute runtime paths and exit codes safely', () => {
   assert.equal(
     defaultRuneworkDependency('0.1.0', '/pkg', '/pkg/dist/cli'),
     'github:stefan-vatov/runework#v0.1.0',
-  )
-  assert.equal(
-    defaultRuneworkPipelinesDependency('0.1.0', '/pkg', '/pkg/src/cli'),
-    'file:/runework-pipelines',
-  )
-  assert.equal(
-    defaultRuneworkPipelinesDependency('0.1.0', '/pkg', '/pkg/dist/cli'),
-    'github:stefan-vatov/runework-pipelines#main',
   )
 })
 

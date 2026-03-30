@@ -18,6 +18,29 @@ test('release automation excludes adjacent reporter tooling from versioned runti
   assert.equal(releaseProjects.has('runework-reporters'), false)
 })
 
+test('runework-init stays zero-out-of-the-box for consumer repos', async () => {
+  // Guard the strongest boundary directly: consumer scaffolds must stay blank.
+  const initSource = await readFile(
+    new URL('../../cli/src/init.ts', import.meta.url),
+    'utf8',
+  )
+  const template = JSON.parse(
+    await readFile(
+      new URL('../templates/runework/package.json.tmpl', import.meta.url),
+      'utf8',
+    ),
+  ) as {
+    dependencies?: Record<string, string>
+  }
+
+  assert.doesNotMatch(initSource, /runework-pipelines/)
+  assert.doesNotMatch(initSource, /code-review/)
+  assert.doesNotMatch(initSource, /constitutional-alignment/)
+  assert.equal(template.dependencies?.runework, '{{runeworkUrl}}')
+  assert.equal(template.dependencies?.zx, '^8.0.0')
+  assert.equal(template.dependencies?.['runework-pipelines'], undefined)
+})
+
 test('runCli shell policy stays environment-agnostic and does not depend on interactive shell features', async () => {
   const source = await readFile(
     new URL('../../core/src/core/run-cli.ts', import.meta.url),

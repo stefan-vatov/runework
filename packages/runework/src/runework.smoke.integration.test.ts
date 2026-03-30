@@ -139,11 +139,7 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
     generatedPkg.dependencies?.runework,
     `github:stefan-vatov/runework#v${manifest.version}`,
   )
-  assert.equal(
-    generatedPkg.dependencies?.['runework-pipelines'],
-    'github:stefan-vatov/runework-pipelines#main',
-    'runework-pipelines should track main during prelaunch',
-  )
+  assert.equal(generatedPkg.dependencies?.['runework-pipelines'], undefined)
 
   const runeworkDir = join(targetDir, '.runework')
   const scriptsDir = join(runeworkDir, 'scripts')
@@ -151,11 +147,7 @@ test('packed artifact installs and scaffolds a blank consumer runtime', async (t
   assert.equal((await stat(scriptsDir)).isDirectory(), true)
   assert.equal((await stat(pipelinesDir)).isDirectory(), true)
   assert.deepEqual(await readdir(scriptsDir), [])
-
-  // Pipelines dir should contain thin re-export stubs for ready-made pipelines
-  const pipelineFiles = await readdir(pipelinesDir)
-  assert.ok(pipelineFiles.includes('code-review.ts'), 'should contain code-review.ts re-export')
-  assert.ok(pipelineFiles.includes('constitutional-alignment.ts'), 'should contain constitutional-alignment.ts re-export')
+  assert.deepEqual(await readdir(pipelinesDir), [])
 
   await writeFile(
     join(pipelinesDir, 'hello.ts'),
